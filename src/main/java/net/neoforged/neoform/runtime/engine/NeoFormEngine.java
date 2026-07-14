@@ -307,6 +307,7 @@ public class NeoFormEngine implements AutoCloseable {
         graph.setResult(ResultIds.NAMED_TO_INTERMEDIARY_MAPPING, createMappings.output("mcpToSrg", NodeOutputType.SRG, "A mapping file that maps MCP names to SRG names"));
         var srgToMcp = createMappings.output("srgToMcp", NodeOutputType.SRG, "A mapping file that maps SRG names to MCP names");
         graph.setResult(ResultIds.INTERMEDIARY_TO_NAMED_MAPPING, srgToMcp);
+        graph.setResult(ResultIds.INTERMEDIARY_TO_NAMED_MAPPING_TSRG, createMappings.output("srgToMcpTsrg", NodeOutputType.TSRG, "A TSRG v1 mapping file that maps SRG names to MCP names"));
         var csvMappings = createMappings.output("csvMappings", NodeOutputType.ZIP, "A zip containing MCP CSV mappings");
         graph.setResult(ResultIds.CSV_MAPPING, csvMappings);
         graph.setResult(ResultIds.NOTCH_TO_INTERMEDIARY_MAPPING, createMappings.output("notchToSrg", NodeOutputType.SRG, "A mapping file that maps notch (obfuscated) names to SRG names"));

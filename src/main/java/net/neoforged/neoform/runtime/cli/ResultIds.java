@@ -63,6 +63,10 @@ public final class ResultIds {
      */
     public static final String INTERMEDIARY_TO_NAMED_MAPPING = "intermediaryToNamedMapping";
     /**
+     * Same as {@link #INTERMEDIARY_TO_NAMED_MAPPING}, serialized as TSRG v1 for legacy runtime consumers.
+     */
+    public static final String INTERMEDIARY_TO_NAMED_MAPPING_TSRG = "intermediaryToNamedMappingTsrg";
+    /**
      * Same as {@link #INTERMEDIARY_TO_NAMED_MAPPING}, but in CSV format which is used at runtime to provide
      * mapping services for reflection by Forge.
      */
