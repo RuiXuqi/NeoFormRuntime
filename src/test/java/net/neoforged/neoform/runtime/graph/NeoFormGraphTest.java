@@ -97,6 +97,17 @@ public class NeoFormGraphTest {
     }
 
     @Test
+    void testMCP_1_12_2_NormalizesLegacyPatches() {
+        var graph = buildGraph("--neoform", "de.oceanlabs.mcp:mcp_config:1.12.2@zip");
+
+        assertNodeChain(graph, "normalizeLegacyMcpPatches", "patch");
+        var patchAction = (ExternalJavaToolAction) graph.getRequiredNode("patch").action();
+        assertThat(patchAction.getArgs())
+                .contains("{patches}")
+                .containsSubsequence("--mode", "FUZZY");
+    }
+
+    @Test
     void testMCP_1_20_1_WithDevTransforms() throws Exception {
         var graph = buildGraph("--neoform", "de.oceanlabs.mcp:mcp_config:1.20.1@zip", "--access-transformer", "at.cfg");
         assertNotPredecessor(graph, "applyDevTransforms", "decompile");

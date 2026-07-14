@@ -17,7 +17,19 @@ public final class PatchActionFactory {
                                         @Nullable NodeOutput sources,
                                         String basePathPrefix,
                                         String modifiedPathPrefix) {
+        return makeAction(builder, patches, null, sources, basePathPrefix, modifiedPathPrefix);
+    }
+
+    public static NodeOutput makeAction(ExecutionNodeBuilder builder,
+                                        DataSource patches,
+                                        @Nullable NodeOutput normalizedPatches,
+                                        @Nullable NodeOutput sources,
+                                        String basePathPrefix,
+                                        String modifiedPathPrefix) {
         Objects.requireNonNull(patches, "patches");
+        if (normalizedPatches != null) {
+            builder.input("patches", normalizedPatches.asInput());
+        }
         if (sources != null) {
             builder.input("input", sources.asInput());
         } else if (!builder.hasInput("input")) {
@@ -28,19 +40,21 @@ public final class PatchActionFactory {
 
         var action = new ExternalJavaToolAction(ToolCoordinate.DIFF_PATCH);
         action.setArgs(List.of(
-                "{input}", patches.archive().getName(),
+                "{input}", normalizedPatches != null ? "{patches}" : patches.archive().getName(),
                 "--prefix", patches.folder(),
                 "--patch",
                 "--archive", "ZIP",
                 "--output", "{output}",
                 "--log-level", "WARN",
-                "--mode", "OFFSET",
+                "--mode", normalizedPatches != null ? "FUZZY" : "OFFSET",
                 "--archive-rejects", "ZIP",
                 "--reject", "{outputRejects}",
                 "--base-path-prefix", basePathPrefix,
                 "--modified-path-prefix", modifiedPathPrefix
         ));
-        action.addDataDependencyHash("patches", patches::cacheKey);
+        if (normalizedPatches == null) {
+            action.addDataDependencyHash("patches", patches::cacheKey);
+        }
 
         builder.action(action);
         return mainOutput;

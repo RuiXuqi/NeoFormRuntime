@@ -12,15 +12,19 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Utility class for building a classpath.
  */
 public class ExtensibleClasspath {
     private List<ClasspathItem> additionalClasspath = new ArrayList<>();
+    private final Set<String> excludedMinecraftLibraryGroups = new LinkedHashSet<>();
+    private final Set<String> excludedMinecraftLibraryModules = new LinkedHashSet<>();
     @Nullable
     private List<ClasspathItem> overriddenClasspath;
 
@@ -34,10 +38,22 @@ public class ExtensibleClasspath {
 
     public void addMinecraftLibraries(Collection<MinecraftLibrary> libraries) {
         for (var library : libraries) {
-            if (library.rulesMatch() && library.getArtifactDownload() != null) {
+            var coordinate = library.getMavenCoordinate();
+            if (library.rulesMatch() && library.getArtifactDownload() != null
+                    && !excludedMinecraftLibraryGroups.contains(coordinate.groupId())
+                    && !excludedMinecraftLibraryModules.contains(coordinate.groupId() + ":" + coordinate.artifactId())) {
                 add(ClasspathItem.of(library));
             }
         }
+    }
+
+    public void excludeMinecraftLibraryGroup(String groupId) {
+        excludedMinecraftLibraryGroups.add(Objects.requireNonNull(groupId, "groupId"));
+    }
+
+    public void excludeMinecraftLibrary(String groupId, String artifactId) {
+        excludedMinecraftLibraryModules.add(Objects.requireNonNull(groupId, "groupId") + ":"
+                + Objects.requireNonNull(artifactId, "artifactId"));
     }
 
     public void addMavenLibraries(Collection<MavenCoordinate> additionalLibraries) {
@@ -108,6 +124,11 @@ public class ExtensibleClasspath {
     }
 
     public void computeCacheKey(String prefix, CacheKeyBuilder ck) {
+        ck.addStrings(prefix + " excluded Minecraft library groups",
+                excludedMinecraftLibraryGroups.stream().sorted().toList());
+        ck.addStrings(prefix + " excluded Minecraft library modules",
+                excludedMinecraftLibraryModules.stream().sorted().toList());
+
         List<ClasspathItem> effectiveItems;
         if (overriddenClasspath != null) {
             effectiveItems = overriddenClasspath;
@@ -151,6 +172,8 @@ public class ExtensibleClasspath {
     public ExtensibleClasspath mergeWithMinecraftLibraries(MinecraftVersionManifest versionManifest) {
         if (overriddenClasspath == null) {
             var mergedClasspath = new ExtensibleClasspath();
+            mergedClasspath.excludedMinecraftLibraryGroups.addAll(excludedMinecraftLibraryGroups);
+            mergedClasspath.excludedMinecraftLibraryModules.addAll(excludedMinecraftLibraryModules);
             mergedClasspath.addMinecraftLibraries(versionManifest.libraries());
             mergedClasspath.addAll(getEffectiveClasspath());
             return mergedClasspath;
@@ -163,6 +186,8 @@ public class ExtensibleClasspath {
         var result = new ExtensibleClasspath();
         result.overriddenClasspath = overriddenClasspath;
         result.additionalClasspath = new ArrayList<>(additionalClasspath);
+        result.excludedMinecraftLibraryGroups.addAll(excludedMinecraftLibraryGroups);
+        result.excludedMinecraftLibraryModules.addAll(excludedMinecraftLibraryModules);
         return result;
     }
 }

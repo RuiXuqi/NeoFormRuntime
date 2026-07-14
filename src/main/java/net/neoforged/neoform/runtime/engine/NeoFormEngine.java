@@ -11,6 +11,7 @@ import net.neoforged.neoform.runtime.actions.ExternalJavaToolAction;
 import net.neoforged.neoform.runtime.actions.InjectFromZipFileSource;
 import net.neoforged.neoform.runtime.actions.InjectZipContentAction;
 import net.neoforged.neoform.runtime.actions.MergeWithSourcesAction;
+import net.neoforged.neoform.runtime.actions.NormalizeLegacyMcpPatchesAction;
 import net.neoforged.neoform.runtime.actions.PatchActionFactory;
 import net.neoforged.neoform.runtime.actions.RecompileSourcesAction;
 import net.neoforged.neoform.runtime.actions.RecompileSourcesActionWithECJ;
@@ -472,13 +473,17 @@ public class NeoFormEngine implements AutoCloseable {
                 ));
             }
             case "patch" -> {
-                PatchActionFactory.makeAction(
-                        builder,
-                        getRequiredDataSource("patches"),
-                        null,
-                        "a/",
-                        "b/"
-                );
+                var patches = getRequiredDataSource("patches");
+                if (processGeneration.usesLegacyMcp()) {
+                    var normalize = graph.nodeBuilder("normalizeLegacyMcpPatches");
+                    var normalizedPatches = normalize.output("output", NodeOutputType.ZIP,
+                            "Legacy MCP patches with unified diff context lines normalized");
+                    normalize.action(new NormalizeLegacyMcpPatchesAction(patches));
+                    normalize.build();
+                    PatchActionFactory.makeAction(builder, patches, normalizedPatches, null, "a/", "b/");
+                } else {
+                    PatchActionFactory.makeAction(builder, patches, null, "a/", "b/");
+                }
             }
             default -> {
                 var function = config.getFunction(step.type());

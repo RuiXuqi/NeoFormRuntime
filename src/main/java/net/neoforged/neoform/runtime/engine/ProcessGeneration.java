@@ -157,6 +157,10 @@ public class ProcessGeneration {
         return defaultLegacyMcpMappings;
     }
 
+    public boolean usesLegacyMcp() {
+        return defaultLegacyMcpMappings != null;
+    }
+
     /**
      * Allows additional resources to be completely removed from Minecraft jars before processing them.
      */

@@ -3,6 +3,7 @@ package net.neoforged.neoform.runtime.actions;
 import net.neoforged.neoform.runtime.artifacts.ClasspathItem;
 import net.neoforged.neoform.runtime.manifests.MinecraftDownload;
 import net.neoforged.neoform.runtime.manifests.MinecraftLibrary;
+import net.neoforged.neoform.runtime.manifests.MinecraftVersionManifest;
 import net.neoforged.neoform.runtime.utils.MavenCoordinate;
 import org.junit.jupiter.api.Test;
 
@@ -46,5 +47,29 @@ class ExtensibleClasspathTest {
 
         assertThat(classpath.getEffectiveClasspath())
                 .containsExactly(ClasspathItem.of(MAVEN_LIB), ClasspathItem.of(MAVEN_LIB_WITH_CLASSIFIER));
+    }
+
+    @Test
+    void testMinecraftLibraryExclusionsSurviveMergeWithoutFilteringExplicitLibraries() {
+        var excludedByGroup = minecraftLibrary("legacy.group:old-api:1.0");
+        var excludedByModule = minecraftLibrary("legacy.module:old-api:1.0");
+        var retained = minecraftLibrary("current.group:current-api:1.0");
+        var explicitReplacement = MavenCoordinate.parse("legacy.group:new-api:2.0");
+        var manifest = new MinecraftVersionManifest("test", Map.of(),
+                List.of(excludedByGroup, excludedByModule, retained), null, null, null, null, null);
+
+        var classpath = new ExtensibleClasspath();
+        classpath.excludeMinecraftLibraryGroup("legacy.group");
+        classpath.excludeMinecraftLibrary("legacy.module", "old-api");
+        classpath.addMavenLibraries(List.of(explicitReplacement));
+
+        assertThat(classpath.mergeWithMinecraftLibraries(manifest).getEffectiveClasspath())
+                .containsExactly(ClasspathItem.of(retained), ClasspathItem.of(explicitReplacement));
+    }
+
+    private static MinecraftLibrary minecraftLibrary(String coordinate) {
+        return new MinecraftLibrary(coordinate,
+                new MinecraftLibrary.Downloads(new MinecraftDownload("", 0, null, null), Map.of()),
+                List.of(), null);
     }
 }

@@ -8,6 +8,7 @@ import net.neoforged.neoform.runtime.actions.ExternalJavaToolAction;
 import net.neoforged.neoform.runtime.actions.InjectFromZipFileSource;
 import net.neoforged.neoform.runtime.actions.InjectZipContentAction;
 import net.neoforged.neoform.runtime.actions.MergeWithSourcesAction;
+import net.neoforged.neoform.runtime.actions.NormalizeLegacyMcpPatchesAction;
 import net.neoforged.neoform.runtime.actions.PatchActionFactory;
 import net.neoforged.neoform.runtime.actions.RecompileSourcesAction;
 import net.neoforged.neoform.runtime.actions.StripManifestDigestContentFilter;
@@ -197,6 +198,9 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
         var artifactManager = engine.getArtifactManager();
         var neoforgeSources = artifactManager.get(neoforgeConfig.sourcesArtifact()).path();
         var neoforgeClasses = artifactManager.get(neoforgeConfig.universalArtifact()).path();
+        var universalCoordinate = MavenCoordinate.parse(neoforgeConfig.universalArtifact());
+        var isCleanroom = universalCoordinate.groupId().equals("com.cleanroommc")
+                && universalCoordinate.artifactId().equals("cleanroom");
         var neoforgeSourcesZip = new ZipFile(neoforgeSources.toFile());
         var neoforgeClassesZip = new ZipFile(neoforgeClasses.toFile());
         engine.addManagedResource(neoforgeSourcesZip);
@@ -225,6 +229,8 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
                 + ").*\\.java$");
 
         transformSources.setAccessTransformersData(List.of("neoForgeAccessTransformers"));
+        var deferUserdevSources = engine.getProcessGeneration().usesLegacyMcp()
+                && neoforgeConfig.sourceProcessor() != null;
 
         // When source remapping is in effect, we would normally have to remap the NeoForge sources as well
         // To circumvent this, we inject the sources before recompile and disable the optimization of
@@ -243,11 +249,13 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
                                 universalFilter,
                                 StripManifestDigestContentFilter.INSTANCE
                         ));
-                        action.getInjectedSources().add(new InjectFromZipFileSource(
-                                neoforgeSourcesZip,
-                                "/",
-                                sourceRootFilter
-                        ));
+                        if (!deferUserdevSources) {
+                            action.getInjectedSources().add(new InjectFromZipFileSource(
+                                    neoforgeSourcesZip,
+                                    "/",
+                                    sourceRootFilter
+                            ));
+                        }
                     }
             ));
         }
@@ -257,8 +265,19 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
                 "recompile",
                 RecompileSourcesAction.class,
                 action -> {
-                    action.getClasspath().addMavenLibraries(neoforgeConfig.libraries());
-                    action.getClasspath().addPaths(List.of(neoforgeClasses));
+                    var classpath = action.getClasspath();
+                    if (isCleanroom) {
+                        classpath.excludeMinecraftLibraryGroup("org.lwjgl.lwjgl");
+                        classpath.excludeMinecraftLibraryGroup("oshi-project");
+                        classpath.excludeMinecraftLibraryGroup("net.java.jutils");
+                        classpath.excludeMinecraftLibrary("com.mojang", "patchy");
+                        classpath.excludeMinecraftLibrary("com.ibm.icu", "icu4j-core-mojang");
+                        classpath.excludeMinecraftLibrary("io.netty", "netty-all");
+                        classpath.excludeMinecraftLibrary("net.java.dev.jna", "platform");
+                        classpath.addMavenLibraries(List.of(MavenCoordinate.parse("com.cleanroommc:lwjglx:1.0.0")));
+                    }
+                    classpath.addMavenLibraries(neoforgeConfig.libraries());
+                    classpath.addPaths(List.of(neoforgeClasses));
                 }
         ));
 
@@ -305,10 +324,38 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
             neoForgePatchBaseNodeId = "processForgeSources";
         }
 
+        if (deferUserdevSources) {
+            engine.applyTransform(new ReplaceNodeOutput(neoForgePatchBaseNodeId, "output", "injectLegacyUserdevSources",
+                    (builder, previousOutput) -> {
+                        builder.input("input", previousOutput.asInput());
+                        var output = builder.output("output", NodeOutputType.ZIP,
+                                "Sources after injecting legacy userdev sources");
+                        builder.action(new InjectZipContentAction(List.of(
+                                new InjectFromZipFileSource(neoforgeSourcesZip, "/", sourceRootFilter)
+                        )));
+                        return output;
+                    }
+            ));
+            neoForgePatchBaseNodeId = "injectLegacyUserdevSources";
+        }
+
+        var neoForgePatches = new DataSource(neoforgeZipFile, neoforgeConfig.patchesFolder(), engine.getFileHashingService());
+        final NodeOutput normalizedNeoForgePatches;
+        if (engine.getProcessGeneration().usesLegacyMcp()) {
+            var normalize = engine.getGraph().nodeBuilder("normalizeLegacyUserdevPatches");
+            normalizedNeoForgePatches = normalize.output("output", NodeOutputType.ZIP,
+                    "Legacy userdev patches with unified diff context lines normalized");
+            normalize.action(new NormalizeLegacyMcpPatchesAction(neoForgePatches));
+            normalize.build();
+        } else {
+            normalizedNeoForgePatches = null;
+        }
+
         engine.applyTransform(new ReplaceNodeOutput(neoForgePatchBaseNodeId, "output", "applyNeoforgePatches",
                 (builder, previousOutput) -> {
                     return PatchActionFactory.makeAction(builder,
-                            new DataSource(neoforgeZipFile, neoforgeConfig.patchesFolder(), engine.getFileHashingService()),
+                            neoForgePatches,
+                            normalizedNeoForgePatches,
                             previousOutput,
                             Objects.requireNonNullElse(neoforgeConfig.basePathPrefix(), "a/"),
                             Objects.requireNonNullElse(neoforgeConfig.modifiedPathPrefix(), "b/"));
