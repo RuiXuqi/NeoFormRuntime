@@ -13,6 +13,7 @@ import net.neoforged.neoform.runtime.actions.PatchActionFactory;
 import net.neoforged.neoform.runtime.actions.RecompileSourcesAction;
 import net.neoforged.neoform.runtime.actions.StripManifestDigestContentFilter;
 import net.neoforged.neoform.runtime.artifacts.ClasspathItem;
+import net.neoforged.neoform.runtime.compatibility.CleanroomRecompileClasspath;
 import net.neoforged.neoform.runtime.config.neoforge.BinpatcherConfig;
 import net.neoforged.neoform.runtime.config.neoforge.NeoForgeConfig;
 import net.neoforged.neoform.runtime.config.neoform.NeoFormFunction;
@@ -198,9 +199,6 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
         var artifactManager = engine.getArtifactManager();
         var neoforgeSources = artifactManager.get(neoforgeConfig.sourcesArtifact()).path();
         var neoforgeClasses = artifactManager.get(neoforgeConfig.universalArtifact()).path();
-        var universalCoordinate = MavenCoordinate.parse(neoforgeConfig.universalArtifact());
-        var isCleanroom = universalCoordinate.groupId().equals("com.cleanroommc")
-                && universalCoordinate.artifactId().equals("cleanroom");
         var neoforgeSourcesZip = new ZipFile(neoforgeSources.toFile());
         var neoforgeClassesZip = new ZipFile(neoforgeClasses.toFile());
         engine.addManagedResource(neoforgeSourcesZip);
@@ -266,16 +264,7 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
                 RecompileSourcesAction.class,
                 action -> {
                     var classpath = action.getClasspath();
-                    if (isCleanroom) {
-                        classpath.excludeMinecraftLibraryGroup("org.lwjgl.lwjgl");
-                        classpath.excludeMinecraftLibraryGroup("oshi-project");
-                        classpath.excludeMinecraftLibraryGroup("net.java.jutils");
-                        classpath.excludeMinecraftLibrary("com.mojang", "patchy");
-                        classpath.excludeMinecraftLibrary("com.ibm.icu", "icu4j-core-mojang");
-                        classpath.excludeMinecraftLibrary("io.netty", "netty-all");
-                        classpath.excludeMinecraftLibrary("net.java.dev.jna", "platform");
-                        classpath.addMavenLibraries(List.of(MavenCoordinate.parse("com.cleanroommc:lwjglx:1.0.0")));
-                    }
+                    CleanroomRecompileClasspath.configureIfNeeded(neoforgeConfig.universalArtifact(), classpath);
                     classpath.addMavenLibraries(neoforgeConfig.libraries());
                     classpath.addPaths(List.of(neoforgeClasses));
                 }
