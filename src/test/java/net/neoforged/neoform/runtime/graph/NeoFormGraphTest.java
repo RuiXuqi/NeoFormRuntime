@@ -137,6 +137,10 @@ public class NeoFormGraphTest {
     void testNeoForge_1_20_1() throws Exception {
         var graph = buildGraph("--neoforge", "net.neoforged:forge:1.20.1-47.1.54:userdev");
 
+        // Recompile Pipeline
+        assertNodeChain(graph, "recompile", "compiledWithNeoForge");
+        assertResultFromNode(graph, "compiledWithNeoForge", "output", ResultIds.GAME_JAR_WITH_NEOFORGE);
+
         // No Recompile Pipeline
         assertNodeChain(graph, "rename", "binaryPatch", "copyUnpatchedClasses", "applyDevTransforms", "binaryWithNeoForge", "remapSrgClassesToOfficial");
         assertResultFromNode(graph, "remapSrgClassesToOfficial", "output", ResultIds.GAME_JAR_NO_RECOMP);

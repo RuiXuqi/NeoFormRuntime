@@ -24,7 +24,8 @@ public final class ResultIds {
      */
     public static final String GAME_SOURCES_WITH_NEOFORGE = "gameSourcesWithNeoForge";
     /**
-     * Same as {@link #GAME_JAR}, but .class files from the NeoForge universal jar are merged into the jar file.
+     * Same as {@link #GAME_JAR}, but NeoForge classes and required runtime metadata from the universal jar are
+     * merged into the jar file.
      * Should be considered deprecated as NeoForge should be added separately to the classpath.
      */
     public static final String GAME_JAR_WITH_NEOFORGE = "gameJarWithNeoForge";

@@ -205,12 +205,9 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
         engine.addManagedResource(neoforgeClassesZip);
 
         var transformSources = getOrAddTransformSourcesAction(engine);
-        var universalFilterExpression = new StringBuilder("^(?!META-INF/[^/]+\\.(SF|RSA|DSA|EC)$|.*\\.class$)");
-        for (var filter : neoforgeConfig.universalFilters()) {
-            universalFilterExpression.append("(?=").append(filter).append(")");
-        }
-        universalFilterExpression.append(".*");
-        var universalFilter = Pattern.compile(universalFilterExpression.toString());
+        var universalFilter = createUniversalFilter(
+                "(?!META-INF/[^/]+\\.(SF|RSA|DSA|EC)$|.*\\.class$)",
+                neoforgeConfig.universalFilters());
         var sourceRoots = new LinkedHashSet<String>();
         var sourceEntries = neoforgeSourcesZip.entries();
         while (sourceEntries.hasMoreElements()) {
@@ -353,7 +350,8 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
 
         var graph = engine.getGraph();
         var sourcesWithNeoForgeOutput = createSourcesWithNeoForge(engine, neoforgeSourcesZip);
-        var compiledWithNeoForgeOutput = createCompiledWithNeoForge(engine, neoforgeClassesZip);
+        var compiledWithNeoForgeOutput = createCompiledWithNeoForge(
+                engine, neoforgeClassesZip, neoforgeConfig.universalFilters());
 
         var sourcesAndCompiledWithNeoForgeOutput =
                 createSourcesAndCompiledWithNeoForge(graph, compiledWithNeoForgeOutput, sourcesWithNeoForgeOutput);
@@ -435,25 +433,45 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
         }
     }
 
-    private static NodeOutput createCompiledWithNeoForge(NeoFormEngine engine, ZipFile neoforgeClassesZip) {
+    private static NodeOutput createCompiledWithNeoForge(
+            NeoFormEngine engine, ZipFile neoforgeClassesZip, List<String> universalFilters) {
         var graph = engine.getGraph();
         var recompiledClasses = graph.getRequiredOutput("recompile", "output");
 
-        // In older processes, we already had to inject the sources before recompiling (due to remapping)
-        if (engine.getProcessGeneration().sourcesUseIntermediaryNames()) {
-            return recompiledClasses;
-        }
-
-        // Add a step that produces a classes-zip containing both Minecraft and NeoForge classes
+        // Add a step that produces a classes-zip containing both Minecraft and NeoForge classes and metadata.
         var builder = graph.nodeBuilder("compiledWithNeoForge");
         builder.input("input", recompiledClasses.asInput());
         var output = builder.output("output", NodeOutputType.JAR, "JAR containing NeoForge classes, resources and Minecraft classes");
-        builder.action(new InjectZipContentAction(List.of(
-                new InjectFromZipFileSource(neoforgeClassesZip, "/")
-        )));
+        if (engine.getProcessGeneration().sourcesUseIntermediaryNames()) {
+            // Older processes inject and recompile NeoForge sources. Source transformation can discard
+            // ServiceLoader metadata, so restore only that metadata without overwriting recompiled classes.
+            builder.action(createLegacyUniversalMetadataInjection(neoforgeClassesZip, universalFilters));
+        } else {
+            builder.action(new InjectZipContentAction(List.of(
+                    new InjectFromZipFileSource(neoforgeClassesZip, "/")
+            )));
+        }
         builder.build();
 
         return output;
+    }
+
+    static InjectZipContentAction createLegacyUniversalMetadataInjection(
+            ZipFile universalJar, List<String> universalFilters) {
+        var serviceProviderFilter = createUniversalFilter(
+                "(?=META-INF/services/[^/]+$)", universalFilters);
+        return new InjectZipContentAction(List.of(
+                new InjectFromZipFileSource(universalJar, "/", serviceProviderFilter)
+        ));
+    }
+
+    private static Pattern createUniversalFilter(String entryFilter, List<String> universalFilters) {
+        var expression = new StringBuilder("^").append(entryFilter);
+        for (var filter : universalFilters) {
+            expression.append("(?=").append(filter).append(")");
+        }
+        expression.append(".*");
+        return Pattern.compile(expression.toString());
     }
 
     // Add a step that produces a sources-zip containing both Minecraft and NeoForge sources
