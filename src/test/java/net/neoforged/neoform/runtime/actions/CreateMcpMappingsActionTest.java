@@ -22,7 +22,7 @@ class CreateMcpMappingsActionTest {
     Path tempDir;
 
     @Test
-    void writesSrgToMcpAsSrgAndHeaderlessTsrgV1() throws IOException {
+    void writesMcpMappingsAsSrgAndHeaderlessTsrgV1() throws IOException {
         var obfToSrgPath = tempDir.resolve("notch-to-srg.srg");
         var obfToSrgBuilder = IMappingBuilder.create("notch", "srg");
         var classMapping = obfToSrgBuilder.addClass("a", "net/minecraft/Test");
@@ -40,6 +40,7 @@ class CreateMcpMappingsActionTest {
         var srgOutput = tempDir.resolve("srg-to-mcp.srg");
         var tsrgOutput = tempDir.resolve("srg-to-mcp.tsrg");
         var mcpToSrgOutput = tempDir.resolve("mcp-to-srg.srg");
+        var mcpToSrgTsrgOutput = tempDir.resolve("mcp-to-srg.tsrg");
         var notchToSrgOutput = tempDir.resolve("notch-to-srg-output.srg");
         var csvOutput = tempDir.resolve("csv-output.zip");
 
@@ -48,6 +49,7 @@ class CreateMcpMappingsActionTest {
         when(environment.getOutputPath("srgToMcp")).thenReturn(srgOutput);
         when(environment.getOutputPath("srgToMcpTsrg")).thenReturn(tsrgOutput);
         when(environment.getOutputPath("mcpToSrg")).thenReturn(mcpToSrgOutput);
+        when(environment.getOutputPath("mcpToSrgTsrg")).thenReturn(mcpToSrgTsrgOutput);
         when(environment.getOutputPath("notchToSrg")).thenReturn(notchToSrgOutput);
         when(environment.getOutputPath("csvMappings")).thenReturn(csvOutput);
 
@@ -61,6 +63,15 @@ class CreateMcpMappingsActionTest {
                 "net/minecraft/Test net/minecraft/Test",
                 "\tfield_1_value value",
                 "\tfunc_2_run (I)V runThing"
+        );
+        assertThat(Files.readAllLines(mcpToSrgOutput)).contains(
+                "FD: net/minecraft/Test/value net/minecraft/Test/field_1_value",
+                "MD: net/minecraft/Test/runThing (I)V net/minecraft/Test/func_2_run (I)V"
+        );
+        assertThat(Files.readAllLines(mcpToSrgTsrgOutput)).containsExactly(
+                "net/minecraft/Test net/minecraft/Test",
+                "\tvalue field_1_value",
+                "\trunThing (I)V func_2_run"
         );
     }
 

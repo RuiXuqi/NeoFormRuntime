@@ -115,6 +115,14 @@ public class NeoFormGraphTest {
     }
 
     @Test
+    void testMCP_1_12_2_ExposesMcpToSrgMappingsInBothFormats() {
+        var graph = buildGraph("--neoform", "de.oceanlabs.mcp:mcp_config:1.12.2@zip");
+
+        assertResultFromNode(graph, "createMcpMappings", "mcpToSrgTsrg", ResultIds.NAMED_TO_INTERMEDIARY_MAPPING);
+        assertResultFromNode(graph, "createMcpMappings", "mcpToSrg", ResultIds.NAMED_TO_INTERMEDIARY_MAPPING_SRG);
+    }
+
+    @Test
     void testMCP_1_20_1_WithDevTransforms() throws Exception {
         var graph = buildGraph("--neoform", "de.oceanlabs.mcp:mcp_config:1.20.1@zip", "--access-transformer", "at.cfg");
         assertNotPredecessor(graph, "applyDevTransforms", "decompile");

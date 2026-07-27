@@ -58,6 +58,11 @@ public final class ResultIds {
      */
     public static final String NAMED_TO_INTERMEDIARY_MAPPING = "namedToIntermediaryMapping";
     /**
+     * Same as {@link #NAMED_TO_INTERMEDIARY_MAPPING}, serialized as SRG for legacy MCP consumers.
+     * Only available in legacy MCP processes.
+     */
+    public static final String NAMED_TO_INTERMEDIARY_MAPPING_SRG = "namedToIntermediaryMappingSrg";
+    /**
      * A SRG mapping file to map from intermediary-names to developer-facing names.
      * Only available in legacy processes where artifacts, patches and runtime use an intermediary naming scheme.
      */
