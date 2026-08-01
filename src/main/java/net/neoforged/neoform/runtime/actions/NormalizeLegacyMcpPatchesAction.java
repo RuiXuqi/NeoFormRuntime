@@ -70,7 +70,7 @@ public final class NormalizeLegacyMcpPatchesAction extends BuiltInAction {
     @Override
     public void computeCacheKey(CacheKeyBuilder ck) {
         super.computeCacheKey(ck);
-        ck.add("patches", patches.cacheKey());
+        ck.addDataSource("patches", patches.id());
         ck.add("patches folder", patches.folder());
     }
 }

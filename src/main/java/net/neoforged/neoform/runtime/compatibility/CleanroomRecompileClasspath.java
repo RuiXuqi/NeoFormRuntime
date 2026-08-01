@@ -13,6 +13,9 @@ public final class CleanroomRecompileClasspath {
     private CleanroomRecompileClasspath() {}
 
     public static void configureIfNeeded(String universalArtifact, ExtensibleClasspath classpath) {
+        if (!universalArtifact.matches("[^:]+:[^:]+:[^:@]+(?::[^@]+)?(?:@[^:]+)?")) {
+            return;
+        }
         var universal = MavenCoordinate.parse(universalArtifact);
         if (!CLEANROOM_GROUP.equals(universal.groupId())
                 || !CLEANROOM_ARTIFACT.equals(universal.artifactId())) {

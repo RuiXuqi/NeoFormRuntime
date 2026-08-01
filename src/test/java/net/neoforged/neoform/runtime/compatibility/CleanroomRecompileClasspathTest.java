@@ -50,6 +50,19 @@ class CleanroomRecompileClasspathTest {
                 .containsExactly(ClasspathItem.of(lwjgl2));
     }
 
+    @Test
+    void leavesLocalUniversalArtifactPathUntouched() {
+        var retained = minecraftLibrary("example:retained:1.0");
+        var manifest = versionManifest(List.of(retained));
+        var classpath = new ExtensibleClasspath();
+
+        CleanroomRecompileClasspath.configureIfNeeded(
+                "C:\\temp\\neoforge-universal.jar", classpath);
+
+        assertThat(classpath.mergeWithMinecraftLibraries(manifest).getEffectiveClasspath())
+                .containsExactly(ClasspathItem.of(retained));
+    }
+
     private static MinecraftVersionManifest versionManifest(List<MinecraftLibrary> libraries) {
         return new MinecraftVersionManifest("test", Map.of(), libraries, null, null, null, null, null);
     }

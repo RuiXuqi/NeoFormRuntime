@@ -53,7 +53,7 @@ class CreateMcpMappingsActionTest {
         when(environment.getOutputPath("notchToSrg")).thenReturn(notchToSrgOutput);
         when(environment.getOutputPath("csvMappings")).thenReturn(csvOutput);
 
-        new CreateMcpMappingsAction(mcpMappingsPath, "mappings", () -> null).run(environment);
+        new CreateMcpMappingsAction(mcpMappingsPath, "mappings").run(environment);
 
         assertThat(Files.readAllLines(srgOutput)).contains(
                 "FD: net/minecraft/Test/field_1_value net/minecraft/Test/value",

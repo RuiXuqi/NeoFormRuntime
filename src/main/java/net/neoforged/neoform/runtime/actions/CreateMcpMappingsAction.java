@@ -1,6 +1,5 @@
 package net.neoforged.neoform.runtime.actions;
 
-import net.neoforged.neoform.runtime.cache.CacheKey;
 import net.neoforged.neoform.runtime.cache.CacheKeyBuilder;
 import net.neoforged.neoform.runtime.engine.ProcessingEnvironment;
 import net.neoforged.srgutils.IMappingBuilder;
@@ -10,7 +9,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.function.Supplier;
 
 /**
  * Creates SRG <-> MCP mapping files from legacy MCP CSV mappings and the obfuscated -> SRG mapping.
@@ -18,14 +16,11 @@ import java.util.function.Supplier;
 public class CreateMcpMappingsAction extends BuiltInAction {
     private final Path mcpMappingsPath;
     private final String obfToSrgDataId;
-    private final Supplier<CacheKey.AnnotatedValue> obfToSrgCacheKey;
 
     public CreateMcpMappingsAction(Path mcpMappingsPath,
-                                   String obfToSrgDataId,
-                                   Supplier<CacheKey.AnnotatedValue> obfToSrgCacheKey) {
+                                   String obfToSrgDataId) {
         this.mcpMappingsPath = mcpMappingsPath;
         this.obfToSrgDataId = obfToSrgDataId;
-        this.obfToSrgCacheKey = obfToSrgCacheKey;
     }
 
     @Override
@@ -67,6 +62,6 @@ public class CreateMcpMappingsAction extends BuiltInAction {
     public void computeCacheKey(CacheKeyBuilder ck) {
         super.computeCacheKey(ck);
         ck.addPath("mcp mappings", mcpMappingsPath);
-        ck.add("obf to srg mappings", obfToSrgCacheKey.get());
+        ck.addDataSource("obf to srg mappings", obfToSrgDataId);
     }
 }

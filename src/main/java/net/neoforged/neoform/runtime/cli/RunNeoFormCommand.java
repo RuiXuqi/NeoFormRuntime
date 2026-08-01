@@ -17,7 +17,6 @@ import net.neoforged.neoform.runtime.compatibility.CleanroomRecompileClasspath;
 import net.neoforged.neoform.runtime.config.neoforge.BinpatcherConfig;
 import net.neoforged.neoform.runtime.config.neoforge.NeoForgeConfig;
 import net.neoforged.neoform.runtime.config.neoform.NeoFormFunction;
-import net.neoforged.neoform.runtime.engine.DataSource;
 import net.neoforged.neoform.runtime.engine.NeoFormEngine;
 import net.neoforged.neoform.runtime.graph.ExecutionGraph;
 import net.neoforged.neoform.runtime.graph.ExecutionNode;
@@ -284,8 +283,10 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
                             List<String> args = new ArrayList<>();
                             Collections.addAll(args, "--strip", "--input", "{input}", "--output", "{output}");
                             for (int i = 0; i < sasFiles.size(); i++) {
+                                var dataSourceId = "sasFile" + i;
                                 args.add("--data");
-                                args.add("{sasFile" + i + "}");
+                                args.add("{" + dataSourceId + "}");
+                                action.addDataSourceDependency(dataSourceId);
                             }
                             action.setArgs(args);
                             builder.action(action);
@@ -325,7 +326,7 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
             neoForgePatchBaseNodeId = "injectLegacyUserdevSources";
         }
 
-        var neoForgePatches = new DataSource(neoforgeZipFile, neoforgeConfig.patchesFolder(), engine.getFileHashingService());
+        var neoForgePatches = engine.addDataSource("neoForgePatches", neoforgeZipFile, neoforgeConfig.patchesFolder());
         final NodeOutput normalizedNeoForgePatches;
         if (engine.getProcessGeneration().usesLegacyMcp()) {
             var normalize = engine.getGraph().nodeBuilder("normalizeLegacyUserdevPatches");
@@ -513,6 +514,7 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
         var output = builder.output("output", NodeOutputType.JAR, "JAR containing the patched Minecraft classes");
         var action = new ExternalJavaToolAction(MavenCoordinate.parse(config.version()));
         action.setArgs(config.args());
+        action.addDataSourceDependency("patch");
         builder.action(action);
         builder.build();
         return output;

@@ -7,6 +7,7 @@ import net.neoforged.neoform.runtime.graph.NodeOutputType;
 import net.neoforged.neoform.runtime.utils.ToolCoordinate;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -39,9 +40,14 @@ public final class PatchActionFactory {
         builder.output("outputRejects", NodeOutputType.ZIP, "ZIP file containing the rejected patches");
 
         var action = new ExternalJavaToolAction(ToolCoordinate.DIFF_PATCH);
-        action.setArgs(List.of(
-                "{input}", normalizedPatches != null ? "{patches}" : patches.archive().getName(),
-                "--prefix", patches.folder(),
+        var args = new ArrayList<String>();
+        args.add("{input}");
+        args.add(normalizedPatches != null ? "{patches}" : "{" + patches.id() + "}");
+        if (normalizedPatches != null) {
+            args.add("--prefix");
+            args.add(patches.folder());
+        }
+        args.addAll(List.of(
                 "--patch",
                 "--archive", "ZIP",
                 "--output", "{output}",
@@ -52,8 +58,9 @@ public final class PatchActionFactory {
                 "--base-path-prefix", basePathPrefix,
                 "--modified-path-prefix", modifiedPathPrefix
         ));
+        action.setArgs(args);
         if (normalizedPatches == null) {
-            action.addDataDependencyHash("patches", patches::cacheKey);
+            action.addDataSourceDependency(patches.id());
         }
 
         builder.action(action);

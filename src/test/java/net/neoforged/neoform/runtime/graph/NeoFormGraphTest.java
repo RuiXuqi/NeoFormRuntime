@@ -89,6 +89,10 @@ public class NeoFormGraphTest {
     void testMCP_1_20_1() throws Exception {
         var graph = buildGraph("--neoform", "de.oceanlabs.mcp:mcp_config:1.20.1@zip");
         assertThat(graph.getNodes()).extracting("id").doesNotContain("applyDevTransforms");
+        var patchAction = (ExternalJavaToolAction) graph.getRequiredNode("patch").action();
+        assertThat(patchAction.getArgs())
+                .contains("{patches}")
+                .doesNotContain("--prefix");
 
         // No Recompile Pipeline
         assertNodeChain(graph, "rename", "remapSrgClassesToOfficial");
@@ -104,6 +108,7 @@ public class NeoFormGraphTest {
         var patchAction = (ExternalJavaToolAction) graph.getRequiredNode("patch").action();
         assertThat(patchAction.getArgs())
                 .contains("{patches}")
+                .containsSubsequence("--prefix", "patches/joined/")
                 .containsSubsequence("--mode", "FUZZY");
     }
 
