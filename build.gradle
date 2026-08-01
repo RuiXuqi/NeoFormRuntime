@@ -4,11 +4,11 @@ plugins {
     id 'java'
     id 'maven-publish'
     id 'com.gradleup.shadow' version '8.3.0'
-    id "net.neoforged.gradleutils" version "5.0.1"
+    id "net.neoforged.gradleutils" version "6.0.0"
     id "org.jetbrains.gradle.plugin.idea-ext" version "1.1.8"
 }
 
-group = 'net.neoforged'
+group = 'io.github.ruixuqi'
 base {
     archivesName = "neoform-runtime"
 }
@@ -41,10 +41,18 @@ repositories {
 
 java {
     withSourcesJar()
+    withJavadocJar()
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
     }
 }
+
+javadoc {
+    options.addStringOption("Xdoclint:none", "-quiet")
+}
+
+gradleutils.setupSigning()
+gradleutils.setupCentralPublishing()
 
 tasks.withType(JavaCompile).configureEach() {
     options.encoding = "UTF-8"
@@ -141,6 +149,8 @@ publishing {
                 pomUtils.neoForgedDeveloper(it)
                 pomUtils.license(it, PomUtilsExtension.License.LGPL_v2)
             }
+
+            gradleutils.sign(it)
         }
     }
 

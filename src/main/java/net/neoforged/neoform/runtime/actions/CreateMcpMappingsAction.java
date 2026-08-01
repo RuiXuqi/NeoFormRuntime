@@ -11,7 +11,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 /**
- * Creates SRG <-> MCP mapping files from legacy MCP CSV mappings and the obfuscated -> SRG mapping.
+ * Creates SRG {@code <->} MCP mapping files from legacy MCP CSV mappings and the obfuscated {@code ->} SRG mapping.
  */
 public class CreateMcpMappingsAction extends BuiltInAction {
     private final Path mcpMappingsPath;

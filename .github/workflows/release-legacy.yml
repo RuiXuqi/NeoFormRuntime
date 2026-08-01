@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    branches: [ "legacy" ]
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+      - name: Add permission
+        run: chmod +x ./gradlew
+      - name: Run tests
+        run: ./gradlew test
+      - name: Publish to Maven Central
+        run: ./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository
+        env:
+          SONATYPE_USER: ${{ secrets.SONATYPE_USER }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_KEY_PASSWORD: ${{ secrets.GPG_KEY_PASSWORD }}
