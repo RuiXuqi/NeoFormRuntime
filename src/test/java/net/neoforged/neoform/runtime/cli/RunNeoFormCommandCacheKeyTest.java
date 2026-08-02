@@ -140,6 +140,11 @@ class RunNeoFormCommandCacheKeyTest {
                 neoform,
                 sources,
                 "com.cleanroommc:cleanroom:0.5.17-alpha:universal",
+                List.of(
+                        "io.netty:netty-common:4.2.15.Final",
+                        "com.cleanroommc:lwjglxx:1.1.21",
+                        "org.lwjgl.lwjgl:lwjgl:2.9.4",
+                        "com.cleanroommc:lwjglx:1.0.0"),
                 new UserdevFixture("binary-patch", "access-transformer"));
 
         var engine = buildEngine(
@@ -166,7 +171,10 @@ class RunNeoFormCommandCacheKeyTest {
                         "net.java.dev.jna:platform");
         assertThat(cacheKey.components().values())
                 .extracting(CacheKey.AnnotatedValue::value)
-                .doesNotContain("com.cleanroommc:lwjglx:1.0.0");
+                .contains("io.netty:netty-common:4.2.15.Final", "com.cleanroommc:lwjglxx:1.1.21")
+                .doesNotContain(
+                        "org.lwjgl.lwjgl:lwjgl:2.9.4",
+                        "com.cleanroommc:lwjglx:1.0.0");
     }
 
     @Test
@@ -387,6 +395,15 @@ class RunNeoFormCommandCacheKeyTest {
                                              Path sources,
                                              String universalArtifact,
                                              UserdevFixture fixture) throws IOException {
+        writeNeoForgeUserdev(userdev, neoform, sources, universalArtifact, List.of(), fixture);
+    }
+
+    private static void writeNeoForgeUserdev(Path userdev,
+                                             Path neoform,
+                                             Path sources,
+                                             String universalArtifact,
+                                             List<String> libraries,
+                                             UserdevFixture fixture) throws IOException {
         // Keep the visible binary patch command identical across fixtures; the cache key must change
         // because of the {patch} data source contents, not because the command line changed.
         var entries = new LinkedHashMap<String, String>();
@@ -406,14 +423,15 @@ class RunNeoFormCommandCacheKeyTest {
                   "patchesOriginalPrefix": "a/",
                   "patchesModifiedPrefix": "b/",
                   "runs": {},
-                  "libraries": [],
+                  "libraries": %s,
                   "modules": [],
                   "sass": []
                 }
                 """.formatted(
                 jsonString(neoform),
                 jsonString(sources),
-                GSON.toJson(universalArtifact)));
+                GSON.toJson(universalArtifact),
+                GSON.toJson(libraries)));
         entries.put("ats/", "");
         entries.put("ats/accesstransformer.cfg", fixture.accessTransformerContent());
         entries.put("binary/patches.lzma", fixture.binaryPatchContent());

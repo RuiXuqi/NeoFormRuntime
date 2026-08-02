@@ -102,6 +102,7 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
     protected void runWithNeoFormEngine(NeoFormEngine engine, List<AutoCloseable> closables) throws IOException, InterruptedException {
         var artifactManager = engine.getArtifactManager();
         String neoForgeUniversalArtifact = null;
+        List<MavenCoordinate> neoForgeLibraries = List.of();
 
         if (mcpMappings != null) {
             engine.setLegacyMcpMappingsPath(artifactManager.get(mcpMappings).path());
@@ -112,6 +113,7 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
             var neoforgeZipFile = engine.addManagedResource(new JarFile(neoforgeArtifact.path().toFile()));
             var neoforgeConfig = NeoForgeConfig.from(neoforgeZipFile);
             neoForgeUniversalArtifact = neoforgeConfig.universalArtifact();
+            neoForgeLibraries = neoforgeConfig.libraries();
 
             // Allow it to be overridden with local or remote data
             Path neoformArtifact;
@@ -191,7 +193,7 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
 
         if (neoForgeUniversalArtifact != null) {
             // Apply this after all graph transforms so every action with an embedded listLibraries step is covered.
-            configureCleanroomListLibraries(engine.getGraph(), neoForgeUniversalArtifact);
+            configureCleanroomListLibraries(engine.getGraph(), neoForgeUniversalArtifact, neoForgeLibraries);
         }
 
         execute(engine);
@@ -267,8 +269,10 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
                 RecompileSourcesAction.class,
                 action -> {
                     var classpath = action.getClasspath();
-                    CleanroomClasspath.configureRecompileIfNeeded(neoforgeConfig.universalArtifact(), classpath);
-                    classpath.addMavenLibraries(neoforgeConfig.libraries());
+                    if (!CleanroomClasspath.configureRecompileIfNeeded(
+                            neoforgeConfig.universalArtifact(), neoforgeConfig.libraries(), classpath)) {
+                        classpath.addMavenLibraries(neoforgeConfig.libraries());
+                    }
                     classpath.addPaths(List.of(neoforgeClasses));
                 }
         ));
@@ -372,13 +376,14 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
 
     }
 
-    static void configureCleanroomListLibraries(ExecutionGraph graph, String universalArtifact) {
+    static void configureCleanroomListLibraries(
+            ExecutionGraph graph, String universalArtifact, List<MavenCoordinate> userdevLibraries) {
         for (var node : graph.getNodes()) {
             if (node.action() instanceof ExternalJavaToolAction action) {
                 var listLibraries = action.getListLibraries();
                 if (listLibraries != null) {
                     CleanroomClasspath.configureListLibrariesIfNeeded(
-                            universalArtifact, listLibraries.getClasspath());
+                            universalArtifact, userdevLibraries, listLibraries.getClasspath());
                 }
             }
         }

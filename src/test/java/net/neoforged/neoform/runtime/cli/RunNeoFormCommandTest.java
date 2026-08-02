@@ -48,7 +48,12 @@ class RunNeoFormCommandTest {
         transformSourcesNode.build();
 
         RunNeoFormCommand.configureCleanroomListLibraries(
-                graph, "com.cleanroommc:cleanroom:0.5.17-alpha:universal");
+                graph,
+                "com.cleanroommc:cleanroom:0.5.17-alpha:universal",
+                List.of(
+                        MavenCoordinate.parse("io.netty:netty-common:4.2.15.Final"),
+                        MavenCoordinate.parse("org.lwjgl.lwjgl:lwjgl:2.9.4"),
+                        MavenCoordinate.parse("com.cleanroommc:lwjglx:1.0.0")));
 
         var retained = minecraftLibrary("example:retained:1.0");
         var manifest = versionManifest(List.of(
@@ -58,11 +63,15 @@ class RunNeoFormCommandTest {
         assertThat(decompileListLibraries.getClasspath()
                 .mergeWithMinecraftLibraries(manifest)
                 .getEffectiveClasspath())
-                .containsExactly(ClasspathItem.of(retained));
+                .containsExactly(
+                        ClasspathItem.of(retained),
+                        ClasspathItem.of(MavenCoordinate.parse("io.netty:netty-common:4.2.15.Final")));
         assertThat(transformSourcesAction.getListLibraries().getClasspath()
                 .mergeWithMinecraftLibraries(manifest)
                 .getEffectiveClasspath())
-                .containsExactly(ClasspathItem.of(retained));
+                .containsExactly(
+                        ClasspathItem.of(retained),
+                        ClasspathItem.of(MavenCoordinate.parse("io.netty:netty-common:4.2.15.Final")));
     }
 
     @Test
