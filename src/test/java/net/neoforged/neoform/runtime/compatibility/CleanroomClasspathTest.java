@@ -13,9 +13,9 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class CleanroomRecompileClasspathTest {
+class CleanroomClasspathTest {
     @Test
-    void replacesObsoleteMinecraftLibrariesForCleanroom() {
+    void excludesObsoleteMinecraftLibrariesFromCleanroomListLibraries() {
         var retained = minecraftLibrary("example:retained:1.0");
         var manifest = versionManifest(List.of(
                 minecraftLibrary("org.lwjgl.lwjgl:lwjgl:2.9.4"),
@@ -28,7 +28,24 @@ class CleanroomRecompileClasspathTest {
                 retained));
         var classpath = new ExtensibleClasspath();
 
-        CleanroomRecompileClasspath.configureIfNeeded(
+        CleanroomClasspath.configureListLibrariesIfNeeded(
+                "com.cleanroommc:cleanroom:0.5.17-alpha:universal", classpath);
+
+        assertThat(classpath.mergeWithMinecraftLibraries(manifest).getEffectiveClasspath())
+                .containsExactly(ClasspathItem.of(retained));
+    }
+
+    @Test
+    void addsLwjglxOnlyOnceToCleanroomRecompileClasspath() {
+        var retained = minecraftLibrary("example:retained:1.0");
+        var manifest = versionManifest(List.of(
+                minecraftLibrary("org.lwjgl.lwjgl:lwjgl:2.9.4"),
+                retained));
+        var classpath = new ExtensibleClasspath();
+
+        CleanroomClasspath.configureRecompileIfNeeded(
+                "com.cleanroommc:cleanroom:0.5.17-alpha:universal", classpath);
+        CleanroomClasspath.configureRecompileIfNeeded(
                 "com.cleanroommc:cleanroom:0.5.17-alpha:universal", classpath);
 
         assertThat(classpath.mergeWithMinecraftLibraries(manifest).getEffectiveClasspath())
@@ -38,12 +55,25 @@ class CleanroomRecompileClasspathTest {
     }
 
     @Test
+    void leavesForgeListLibrariesClasspathUntouched() {
+        var lwjgl2 = minecraftLibrary("org.lwjgl.lwjgl:lwjgl:2.9.4");
+        var manifest = versionManifest(List.of(lwjgl2));
+        var classpath = new ExtensibleClasspath();
+
+        CleanroomClasspath.configureListLibrariesIfNeeded(
+                "net.minecraftforge:forge:1.12.2-14.23.5.2860:universal", classpath);
+
+        assertThat(classpath.mergeWithMinecraftLibraries(manifest).getEffectiveClasspath())
+                .containsExactly(ClasspathItem.of(lwjgl2));
+    }
+
+    @Test
     void leavesForgeRecompileClasspathUntouched() {
         var lwjgl2 = minecraftLibrary("org.lwjgl.lwjgl:lwjgl:2.9.4");
         var manifest = versionManifest(List.of(lwjgl2));
         var classpath = new ExtensibleClasspath();
 
-        CleanroomRecompileClasspath.configureIfNeeded(
+        CleanroomClasspath.configureRecompileIfNeeded(
                 "net.minecraftforge:forge:1.12.2-14.23.5.2860:universal", classpath);
 
         assertThat(classpath.mergeWithMinecraftLibraries(manifest).getEffectiveClasspath())
@@ -56,7 +86,7 @@ class CleanroomRecompileClasspathTest {
         var manifest = versionManifest(List.of(retained));
         var classpath = new ExtensibleClasspath();
 
-        CleanroomRecompileClasspath.configureIfNeeded(
+        CleanroomClasspath.configureRecompileIfNeeded(
                 "C:\\temp\\neoforge-universal.jar", classpath);
 
         assertThat(classpath.mergeWithMinecraftLibraries(manifest).getEffectiveClasspath())

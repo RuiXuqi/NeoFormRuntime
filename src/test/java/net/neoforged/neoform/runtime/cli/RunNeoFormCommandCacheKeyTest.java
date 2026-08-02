@@ -121,6 +121,55 @@ class RunNeoFormCommandCacheKeyTest {
     }
 
     @Test
+    void cleanroomListLibrariesPolicyIsAppliedBeforeExecutionAndIncludedInCacheKey(@TempDir Path tempDir) throws Exception {
+        var neoform = tempDir.resolve("neoform.zip");
+        var parchment = tempDir.resolve("parchment.zip");
+        var sources = tempDir.resolve("cleanroom-sources.jar");
+        var userdev = tempDir.resolve("cleanroom-userdev.jar");
+        var repository = tempDir.resolve("repository");
+        var universal = repository.resolve(
+                "com/cleanroommc/cleanroom/0.5.17-alpha/cleanroom-0.5.17-alpha-universal.jar");
+
+        writeNeoFormWithIntermediarySources(neoform, "source-patch");
+        writeZip(parchment, Map.of("parchment.json", "{}"));
+        writeZip(sources, Map.of("com/cleanroommc/test/Example.java", "package com.cleanroommc.test;\nclass Example {}\n"));
+        Files.createDirectories(universal.getParent());
+        writeZip(universal, Map.of("com/cleanroommc/test/Example.class", "compiled"));
+        writeNeoForgeUserdev(
+                userdev,
+                neoform,
+                sources,
+                "com.cleanroommc:cleanroom:0.5.17-alpha:universal",
+                new UserdevFixture("binary-patch", "access-transformer"));
+
+        var engine = buildEngine(
+                "--home-dir", tempDir.resolve("home").toString(),
+                "--disable-cache-maintenance",
+                "--repository=" + repository.toUri(),
+                "--parchment-data", parchment.toString(),
+                "--neoforge", userdev.toString());
+        var cacheKey = computeActionCacheKey(engine, "applyParchment");
+
+        assertThat(cacheKey.components().entrySet())
+                .filteredOn(entry -> entry.getKey().startsWith(
+                        "listLibraries classpath excluded Minecraft library groups"))
+                .extracting(entry -> entry.getValue().value())
+                .containsExactly("net.java.jutils", "org.lwjgl.lwjgl", "oshi-project");
+        assertThat(cacheKey.components().entrySet())
+                .filteredOn(entry -> entry.getKey().startsWith(
+                        "listLibraries classpath excluded Minecraft library modules"))
+                .extracting(entry -> entry.getValue().value())
+                .containsExactly(
+                        "com.ibm.icu:icu4j-core-mojang",
+                        "com.mojang:patchy",
+                        "io.netty:netty-all",
+                        "net.java.dev.jna:platform");
+        assertThat(cacheKey.components().values())
+                .extracting(CacheKey.AnnotatedValue::value)
+                .doesNotContain("com.cleanroommc:lwjglx:1.0.0");
+    }
+
+    @Test
     void neoFormPatchCacheKeyDoesNotChangeWhenNeoFormArchivePathChanges(@TempDir Path tempDir) throws Exception {
         var neoformA = tempDir.resolve("neoform-a.zip");
         var neoformB = tempDir.resolve("neoform-b.zip");
@@ -178,9 +227,11 @@ class RunNeoFormCommandCacheKeyTest {
         );
     }
 
-    private record NeoForgeCacheKeyFixture(Path userdevA, Path userdevB) {}
+    private record NeoForgeCacheKeyFixture(Path userdevA, Path userdevB) {
+    }
 
-    private record CapturedEngine(Map<String, CacheKey> actionCacheKeys) {}
+    private record CapturedEngine(Map<String, CacheKey> actionCacheKeys) {
+    }
 
     private record UserdevFixture(String binaryPatchContent,
                                   String accessTransformerContent,
@@ -212,8 +263,8 @@ class RunNeoFormCommandCacheKeyTest {
     }
 
     private static NeoForgeCacheKeyFixture createNeoForgeCacheKeyFixture(Path tempDir,
-                                                                        UserdevFixture userdevFixtureA,
-                                                                        UserdevFixture userdevFixtureB) throws IOException {
+                                                                         UserdevFixture userdevFixtureA,
+                                                                         UserdevFixture userdevFixtureB) throws IOException {
         var neoform = tempDir.resolve("neoform.zip");
         var sources = tempDir.resolve("neoforge-sources.jar");
         var universal = tempDir.resolve("neoforge-universal.jar");
@@ -272,35 +323,97 @@ class RunNeoFormCommandCacheKeyTest {
         ));
     }
 
+    private static void writeNeoFormWithIntermediarySources(Path neoform, String sourcePatchContent) throws IOException {
+        writeZip(neoform, Map.of(
+                "config.json", """
+                        {
+                          "spec": 1,
+                          "version": "1.20.1",
+                          "official": true,
+                          "java_target": 17,
+                          "encoding": "UTF-8",
+                          "data": {
+                            "inject": "inject/",
+                            "patches": "patches/"
+                          },
+                          "steps": {
+                            "joined": [
+                              { "type": "downloadJson" },
+                              { "type": "downloadClientMappings" },
+                              { "type": "mergeMappings", "input": "{downloadClientMappingsOutput}" },
+                              { "type": "rename", "input": "{downloadJsonOutput}" },
+                              { "type": "decompile", "input": "{renameOutput}" },
+                              { "type": "inject", "input": "{decompileOutput}" },
+                              { "type": "patch", "input": "{injectOutput}" }
+                            ]
+                          },
+                          "functions": {
+                            "mergeMappings": {
+                              "version": "test:tool:1.0",
+                              "args": ["{input}", "{output}"]
+                            },
+                            "rename": {
+                              "version": "test:tool:1.0",
+                              "args": ["{input}", "{output}"]
+                            },
+                            "decompile": {
+                              "version": "test:tool:1.0",
+                              "args": ["{input}", "{output}"]
+                            }
+                          },
+                          "libraries": {
+                            "joined": []
+                          }
+                        }
+                        """,
+                "inject/", "",
+                "inject/.keep", "",
+                "patches/", "",
+                "patches/.keep", "",
+                "patches/net/neoforged/test.patch", sourcePatchContent
+        ));
+    }
+
     private static void writeNeoForgeUserdev(Path userdev,
                                              Path neoform,
                                              Path sources,
                                              Path universal,
                                              UserdevFixture fixture) throws IOException {
+        writeNeoForgeUserdev(userdev, neoform, sources, universal.toString(), fixture);
+    }
+
+    private static void writeNeoForgeUserdev(Path userdev,
+                                             Path neoform,
+                                             Path sources,
+                                             String universalArtifact,
+                                             UserdevFixture fixture) throws IOException {
         // Keep the visible binary patch command identical across fixtures; the cache key must change
         // because of the {patch} data source contents, not because the command line changed.
         var entries = new LinkedHashMap<String, String>();
         entries.put("config.json", """
-                        {
-                          "spec": 2,
-                          "mcp": %s,
-                          "ats": "ats/",
-                          "binpatches": "binary/patches.lzma",
-                          "binpatcher": {
-                            "version": "test:binpatcher:1.0",
-                            "args": ["--patch", "--base", "{clean}", "--output", "{output}", "--patches", "{patch}"]
-                          },
-                          "patches": "patches/",
-                          "sources": %s,
-                          "universal": %s,
-                          "patchesOriginalPrefix": "a/",
-                          "patchesModifiedPrefix": "b/",
-                          "runs": {},
-                          "libraries": [],
-                          "modules": [],
-                          "sass": []
-                        }
-                        """.formatted(jsonString(neoform), jsonString(sources), jsonString(universal)));
+                {
+                  "spec": 2,
+                  "mcp": %s,
+                  "ats": "ats/",
+                  "binpatches": "binary/patches.lzma",
+                  "binpatcher": {
+                    "version": "test:binpatcher:1.0",
+                    "args": ["--patch", "--base", "{clean}", "--output", "{output}", "--patches", "{patch}"]
+                  },
+                  "patches": "patches/",
+                  "sources": %s,
+                  "universal": %s,
+                  "patchesOriginalPrefix": "a/",
+                  "patchesModifiedPrefix": "b/",
+                  "runs": {},
+                  "libraries": [],
+                  "modules": [],
+                  "sass": []
+                }
+                """.formatted(
+                jsonString(neoform),
+                jsonString(sources),
+                GSON.toJson(universalArtifact)));
         entries.put("ats/", "");
         entries.put("ats/accesstransformer.cfg", fixture.accessTransformerContent());
         entries.put("binary/patches.lzma", fixture.binaryPatchContent());
@@ -383,6 +496,9 @@ class RunNeoFormCommandCacheKeyTest {
                 if (engine.getGraph().getNode(nodeId) != null) {
                     actionCacheKeys.put(nodeId, computeActionCacheKey(engine, nodeId));
                 }
+            }
+            if (engine.getGraph().getNode("applyParchment") != null) {
+                actionCacheKeys.put("applyParchment", computeActionCacheKey(engine, "applyParchment"));
             }
             engineHolder.set(new CapturedEngine(Map.copyOf(actionCacheKeys)));
         }

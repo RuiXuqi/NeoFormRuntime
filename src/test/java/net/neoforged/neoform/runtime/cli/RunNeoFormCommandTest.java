@@ -1,6 +1,15 @@
 package net.neoforged.neoform.runtime.cli;
 
+import net.neoforged.neoform.runtime.actions.ApplySourceTransformAction;
+import net.neoforged.neoform.runtime.actions.CreateLibrariesOptionsFile;
+import net.neoforged.neoform.runtime.actions.ExternalJavaToolAction;
+import net.neoforged.neoform.runtime.artifacts.ClasspathItem;
 import net.neoforged.neoform.runtime.engine.ProcessingEnvironment;
+import net.neoforged.neoform.runtime.graph.ExecutionGraph;
+import net.neoforged.neoform.runtime.manifests.MinecraftDownload;
+import net.neoforged.neoform.runtime.manifests.MinecraftLibrary;
+import net.neoforged.neoform.runtime.manifests.MinecraftVersionManifest;
+import net.neoforged.neoform.runtime.utils.MavenCoordinate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -9,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -20,6 +30,40 @@ import static org.mockito.Mockito.when;
 class RunNeoFormCommandTest {
     @TempDir
     Path tempDir;
+
+    @Test
+    void configuresCleanroomListLibrariesForAllExternalToolActions() {
+        var graph = new ExecutionGraph();
+
+        var decompileListLibraries = new CreateLibrariesOptionsFile();
+        var decompileAction = new ExternalJavaToolAction(MavenCoordinate.parse("example:decompiler:1.0"));
+        decompileAction.setListLibraries(decompileListLibraries);
+        var decompileNode = graph.nodeBuilder("decompile");
+        decompileNode.action(decompileAction);
+        decompileNode.build();
+
+        var transformSourcesAction = new ApplySourceTransformAction();
+        var transformSourcesNode = graph.nodeBuilder("transformSources");
+        transformSourcesNode.action(transformSourcesAction);
+        transformSourcesNode.build();
+
+        RunNeoFormCommand.configureCleanroomListLibraries(
+                graph, "com.cleanroommc:cleanroom:0.5.17-alpha:universal");
+
+        var retained = minecraftLibrary("example:retained:1.0");
+        var manifest = versionManifest(List.of(
+                minecraftLibrary("org.lwjgl.lwjgl:lwjgl:2.9.4"),
+                retained));
+
+        assertThat(decompileListLibraries.getClasspath()
+                .mergeWithMinecraftLibraries(manifest)
+                .getEffectiveClasspath())
+                .containsExactly(ClasspathItem.of(retained));
+        assertThat(transformSourcesAction.getListLibraries().getClasspath()
+                .mergeWithMinecraftLibraries(manifest)
+                .getEffectiveClasspath())
+                .containsExactly(ClasspathItem.of(retained));
+    }
 
     @Test
     void legacyUniversalMetadataInjectionRestoresOnlyAllowedServiceProviders() throws Exception {
@@ -80,6 +124,18 @@ class RunNeoFormCommandTest {
         try (var input = zip.getInputStream(entry)) {
             return new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
+    }
+
+    private static MinecraftVersionManifest versionManifest(List<MinecraftLibrary> libraries) {
+        return new MinecraftVersionManifest("test", Map.of(), libraries, null, null, null, null, null);
+    }
+
+    private static MinecraftLibrary minecraftLibrary(String coordinate) {
+        return new MinecraftLibrary(
+                coordinate,
+                new MinecraftLibrary.Downloads(new MinecraftDownload("", 0, null, null), Map.of()),
+                List.of(),
+                null);
     }
 
     private record TestEntry(String name, String content) {
