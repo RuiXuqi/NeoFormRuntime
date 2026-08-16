@@ -14,6 +14,7 @@ import net.neoforged.neoform.runtime.actions.RecompileSourcesAction;
 import net.neoforged.neoform.runtime.actions.StripManifestDigestContentFilter;
 import net.neoforged.neoform.runtime.artifacts.ClasspathItem;
 import net.neoforged.neoform.runtime.compatibility.CleanroomClasspath;
+import net.neoforged.neoform.runtime.compatibility.LegacyForgeClasspath;
 import net.neoforged.neoform.runtime.config.neoforge.BinpatcherConfig;
 import net.neoforged.neoform.runtime.config.neoforge.NeoForgeConfig;
 import net.neoforged.neoform.runtime.config.neoform.NeoFormFunction;
@@ -193,7 +194,7 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
 
         if (neoForgeUniversalArtifact != null) {
             // Apply this after all graph transforms so every action with an embedded listLibraries step is covered.
-            configureCleanroomListLibraries(engine.getGraph(), neoForgeUniversalArtifact, neoForgeLibraries);
+            configureUserdevListLibraries(engine.getGraph(), neoForgeUniversalArtifact, neoForgeLibraries);
         }
 
         execute(engine);
@@ -270,7 +271,9 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
                 action -> {
                     var classpath = action.getClasspath();
                     if (!CleanroomClasspath.configureRecompileIfNeeded(
-                            neoforgeConfig.universalArtifact(), neoforgeConfig.libraries(), classpath)) {
+                            neoforgeConfig.universalArtifact(), neoforgeConfig.libraries(), classpath)
+                            && !LegacyForgeClasspath.configureRecompileIfNeeded(
+                                    neoforgeConfig.universalArtifact(), neoforgeConfig.libraries(), classpath)) {
                         classpath.addMavenLibraries(neoforgeConfig.libraries());
                     }
                     classpath.addPaths(List.of(neoforgeClasses));
@@ -376,13 +379,15 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
 
     }
 
-    static void configureCleanroomListLibraries(
+    static void configureUserdevListLibraries(
             ExecutionGraph graph, String universalArtifact, List<MavenCoordinate> userdevLibraries) {
         for (var node : graph.getNodes()) {
             if (node.action() instanceof ExternalJavaToolAction action) {
                 var listLibraries = action.getListLibraries();
                 if (listLibraries != null) {
                     CleanroomClasspath.configureListLibrariesIfNeeded(
+                            universalArtifact, userdevLibraries, listLibraries.getClasspath());
+                    LegacyForgeClasspath.configureListLibrariesIfNeeded(
                             universalArtifact, userdevLibraries, listLibraries.getClasspath());
                 }
             }

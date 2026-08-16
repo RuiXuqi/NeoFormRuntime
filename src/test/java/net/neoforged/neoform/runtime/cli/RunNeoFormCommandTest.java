@@ -32,7 +32,7 @@ class RunNeoFormCommandTest {
     Path tempDir;
 
     @Test
-    void configuresCleanroomListLibrariesForAllExternalToolActions() {
+    void configuresUserdevListLibrariesForAllExternalToolActions() {
         var graph = new ExecutionGraph();
 
         var decompileListLibraries = new CreateLibrariesOptionsFile();
@@ -47,7 +47,7 @@ class RunNeoFormCommandTest {
         transformSourcesNode.action(transformSourcesAction);
         transformSourcesNode.build();
 
-        RunNeoFormCommand.configureCleanroomListLibraries(
+        RunNeoFormCommand.configureUserdevListLibraries(
                 graph,
                 "com.cleanroommc:cleanroom:0.5.17-alpha:universal",
                 List.of(
