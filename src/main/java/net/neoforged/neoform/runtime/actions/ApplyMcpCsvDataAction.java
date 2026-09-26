@@ -17,9 +17,11 @@ import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 /**
- * Applies legacy MCP CSV metadata that is not represented in SRG mapping files:
- * parameter names from {@code params.csv}, and member comments from the {@code desc}
- * column in {@code methods.csv} and {@code fields.csv}.
+ * Applies legacy MCP CSV metadata that is not represented in the bytecode:
+ * member comments from the {@code desc} column in {@code methods.csv} and {@code fields.csv}.
+ * Parameter names from {@code params.csv} are also applied here as a fallback for any
+ * parameter that was not renamed on the bytecode level (e.g. names missing from the
+ * TSRG2 parameter mappings used by the class remapper).
  */
 public class ApplyMcpCsvDataAction extends BuiltInAction {
     private static final Pattern PARAMETER_FINDER = Pattern.compile("p_[a-z]?\\d+_\\d+_");
@@ -61,18 +63,24 @@ public class ApplyMcpCsvDataAction extends BuiltInAction {
             for (var mappedField : mappedClass.getFields()) {
                 var csvMapping = csvMappings.fields().get(mappedField.getOriginal());
                 if (csvMapping != null && !csvMapping.description().isBlank()) {
-                    classDocs.fieldDocs().put(mappedField.getMapped(), csvMapping.description());
+                    // The sources still use SRG names at this point; the docs must be keyed by the
+                    // SRG (original) field name to be found in the sources.
+                    classDocs.fieldDocs().put(mappedField.getOriginal(), csvMapping.description());
                 }
             }
 
             for (var mappedMethod : mappedClass.getMethods()) {
                 var csvMapping = csvMappings.methods().get(mappedMethod.getOriginal());
                 if (csvMapping != null && !csvMapping.description().isBlank()) {
-                    classDocs.methodDocs().put(mappedMethod.getMapped(), csvMapping.description());
+                    classDocs.methodDocs().put(mappedMethod.getOriginal(), csvMapping.description());
                 }
             }
         }
         return result;
+    }
+
+    static String applyToSource(String sourceCode, ClassDocs classDocs) {
+        return applyToSource(sourceCode, classDocs, Map.of());
     }
 
     static String applyToSource(String sourceCode, ClassDocs classDocs, Map<String, String> params) {
@@ -161,7 +169,8 @@ public class ApplyMcpCsvDataAction extends BuiltInAction {
     }
 
     private static void addJavadoc(List<String> result, String indent, String rawDoc) {
-        var doc = rawDoc.replace("*/", "* /").strip();
+        // MCP CSVs encode line breaks in multi-line comments as a literal backslash followed by 'n'
+        var doc = rawDoc.replace("*/", "* /").replace("\\n", "\n").strip();
         if (doc.length() <= 100 && !doc.contains("\n")) {
             result.add(indent + "/** " + doc + " */");
             return;

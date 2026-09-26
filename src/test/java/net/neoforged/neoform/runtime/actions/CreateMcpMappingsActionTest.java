@@ -35,10 +35,12 @@ class CreateMcpMappingsActionTest {
         try (var output = new ZipOutputStream(Files.newOutputStream(mcpMappingsPath))) {
             writeZipEntry(output, "fields.csv", "searge,name,side,desc\nfield_1_value,value,0,\n");
             writeZipEntry(output, "methods.csv", "searge,name,side,desc\nfunc_2_run,runThing,0,\n");
+            writeZipEntry(output, "params.csv", "param,name,side\np_2_0_,count,0\n");
         }
 
         var srgOutput = tempDir.resolve("srg-to-mcp.srg");
         var tsrgOutput = tempDir.resolve("srg-to-mcp.tsrg");
+        var tsrg2Output = tempDir.resolve("srg-to-mcp-v2.tsrg");
         var mcpToSrgOutput = tempDir.resolve("mcp-to-srg.srg");
         var mcpToSrgTsrgOutput = tempDir.resolve("mcp-to-srg.tsrg");
         var notchToSrgOutput = tempDir.resolve("notch-to-srg-output.srg");
@@ -48,6 +50,7 @@ class CreateMcpMappingsActionTest {
         when(environment.extractData("mappings")).thenReturn(obfToSrgPath);
         when(environment.getOutputPath("srgToMcp")).thenReturn(srgOutput);
         when(environment.getOutputPath("srgToMcpTsrg")).thenReturn(tsrgOutput);
+        when(environment.getOutputPath("srgToMcpTsrg2")).thenReturn(tsrg2Output);
         when(environment.getOutputPath("mcpToSrg")).thenReturn(mcpToSrgOutput);
         when(environment.getOutputPath("mcpToSrgTsrg")).thenReturn(mcpToSrgTsrgOutput);
         when(environment.getOutputPath("notchToSrg")).thenReturn(notchToSrgOutput);
@@ -72,6 +75,13 @@ class CreateMcpMappingsActionTest {
                 "net/minecraft/Test net/minecraft/Test",
                 "\tvalue field_1_value",
                 "\trunThing (I)V func_2_run"
+        );
+        assertThat(Files.readAllLines(tsrg2Output)).contains(
+                "tsrg2 left right",
+                "net/minecraft/Test net/minecraft/Test",
+                "\tfield_1_value value",
+                "\tfunc_2_run (I)V runThing",
+                "\t\t0 p_2_0_ count"
         );
     }
 

@@ -132,9 +132,12 @@ public class ProcessGeneration {
 
     /**
      * Does the Minecraft source code that MCP/NeoForm creates use SRG names?
+     * <p>
+     * For legacy MCP versions (1.12.2), the classes are remapped to MCP names on the bytecode
+     * level before decompilation, so the decompiled sources no longer use intermediary names.
      */
     public boolean sourcesUseIntermediaryNames() {
-        return sourcesUseIntermediaryNames;
+        return sourcesUseIntermediaryNames && !usesLegacyMcp();
     }
 
     /**

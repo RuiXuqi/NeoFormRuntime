@@ -9,6 +9,7 @@ import net.neoforged.neoform.runtime.actions.InjectFromZipFileSource;
 import net.neoforged.neoform.runtime.actions.InjectZipContentAction;
 import net.neoforged.neoform.runtime.actions.MergeWithSourcesAction;
 import net.neoforged.neoform.runtime.actions.NormalizeLegacyMcpPatchesAction;
+import net.neoforged.neoform.runtime.actions.RemapSrgClassesAction;
 import net.neoforged.neoform.runtime.actions.PatchActionFactory;
 import net.neoforged.neoform.runtime.actions.RecompileSourcesAction;
 import net.neoforged.neoform.runtime.actions.StripManifestDigestContentFilter;
@@ -442,6 +443,17 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
             graph.setResult(ResultIds.GAME_JAR_NO_RECOMP, remappedOutput); // technically redundant, but set again for clarity
             graph.setResult(ResultIds.GAME_JAR_NO_RECOMP_WITH_NEOFORGE, remappedOutput);
 
+        } else if (engine.getProcessGeneration().usesLegacyMcp()) {
+            // Legacy MCP: classes are remapped to MCP names here (the sources are decompiled with
+            // SRG names because the MCP patches require them).
+            var builder = graph.nodeBuilder(engine.getIntermediaryClassesRemapNodeId());
+            builder.input("input", binaryWithNeoForgeOutput.asInput());
+            builder.input("mappings", graph.getResult(ResultIds.INTERMEDIARY_TO_NAMED_MAPPING_TSRG2).asInput());
+            var remappedOutput = builder.output("output", NodeOutputType.JAR, "Classes with SRG method and field names remapped to MCP.");
+            builder.action(new RemapSrgClassesAction());
+            builder.build();
+            graph.setResult(ResultIds.GAME_JAR_NO_RECOMP, remappedOutput);
+            graph.setResult(ResultIds.GAME_JAR_NO_RECOMP_WITH_NEOFORGE, remappedOutput);
         } else {
             graph.setResult(ResultIds.GAME_JAR_NO_RECOMP, binaryPatchOutput);
             graph.setResult(ResultIds.GAME_JAR_NO_RECOMP_WITH_NEOFORGE, binaryWithNeoForgeOutput);
@@ -512,6 +524,19 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
             // 1.20.1 and below use SRG in production and for ATs, so we cannot use the JST output as it is in SRG
             // therefore we must output the renamed sources
             return graph.getResult(ResultIds.GAME_SOURCES);
+        } else if (engine.getProcessGeneration().usesLegacyMcp()) {
+            // Legacy MCP sources keep SRG names until after patching; the MCP-named sources are the
+            // output of applyMcpCsvData.
+            var srgSourcesOutput = graph.getRequiredOutput(engine.getIntermediarySourcesRemapNodeId(), "output");
+
+            var builder = graph.nodeBuilder("sourcesWithNeoForge");
+            builder.input("input", srgSourcesOutput.asInput());
+            var output = builder.output("output", NodeOutputType.ZIP, "Source ZIP containing NeoForge and Minecraft sources");
+            builder.action(new InjectZipContentAction(List.of(
+                    new InjectFromZipFileSource(neoforgeSourcesZip, "/")
+            )));
+            builder.build();
+            return output;
         } else {
             var transformedSourceOutput = graph.getRequiredOutput("transformSources", "output");
 

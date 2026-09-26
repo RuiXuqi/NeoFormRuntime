@@ -24,7 +24,10 @@ public class RemapSrgClassesAction extends ExternalJavaToolAction {
         setArgs(List.of(
                 "--input", "{input}",
                 "--output", "{output}",
-                "--map", environment.getPathArgument(mappingsFile.toAbsolutePath())
+                "--map", environment.getPathArgument(mappingsFile.toAbsolutePath()),
+                // Legacy jars (e.g. Forge 1.12.2) are signed; renaming classes invalidates the signature,
+                // which breaks any consumer that verifies digests (e.g. the decompiler reading the jar).
+                "--strip-sigs"
         ));
         super.run(environment);
     }

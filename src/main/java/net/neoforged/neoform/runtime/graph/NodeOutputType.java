@@ -7,6 +7,7 @@ public enum NodeOutputType {
     ZIP(".zip"),
     JSON(".json"),
     TSRG(".tsrg"),
+    TSRG2(".tsrg"),
     SRG(".srg");
 
     private final String extension;

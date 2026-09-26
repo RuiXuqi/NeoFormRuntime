@@ -1,5 +1,7 @@
 package net.neoforged.neoform.runtime.actions;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -8,6 +10,7 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.zip.ZipFile;
 
 /**
@@ -16,6 +19,36 @@ import java.util.zip.ZipFile;
 public record McpCsvMappings(Map<String, MemberMapping> methods, Map<String, MemberMapping> fields, Map<String, String> params) {
     public record MemberMapping(String name, String description) {
     }
+
+    /**
+     * Returns the legacy MCP placeholder name of the parameter with the given local variable table slot
+     * of the given method, or {@code null} if the method has no CSV mapping. Legacy MCP parameter names
+     * are keyed by the numeric method id (e.g. {@code p_1234_0_} is slot 0 of {@code func_1234_*}).
+     */
+    @Nullable
+    public String parameterSrgName(String methodSrgName, int slot) {
+        if (!methods.containsKey(methodSrgName)) {
+            return null;
+        }
+        // The SRG name is func_<id>_<suffix>; the parameter id references <id>
+        var matcher = SRG_METHOD_ID.matcher(methodSrgName);
+        if (!matcher.matches()) {
+            return null;
+        }
+        return "p_" + matcher.group(1) + "_" + slot + "_";
+    }
+
+    /**
+     * Returns the MCP name of the parameter with the given local variable table slot of the given method,
+     * or {@code null} if no mapping exists.
+     */
+    @Nullable
+    public String parameterName(String methodSrgName, int slot) {
+        var srgName = parameterSrgName(methodSrgName, slot);
+        return srgName != null ? params.get(srgName) : null;
+    }
+
+    private static final Pattern SRG_METHOD_ID = Pattern.compile("func_(\\d+)_[a-zA-Z_]+");
 
     public static McpCsvMappings load(Path zipPath) throws IOException {
         try (var zip = new ZipFile(zipPath.toFile())) {

@@ -128,6 +128,17 @@ public class NeoFormGraphTest {
     }
 
     @Test
+    void testMCP_1_12_2_SourceChainKeepsSrgUntilPatched() {
+        var graph = buildGraph("--neoform", "de.oceanlabs.mcp:mcp_config:1.12.2@zip");
+
+        // 1.12.2 MCP patches are written against SRG names, so sources keep SRG names until
+        // applyMcpCsvData (javadoc/params) and remapSrgSourcesToMcp (names) after patching.
+        assertNodeChain(graph, "rename", "mcinject", "decompile", "inject", "patch", "applyMcpCsvData", "remapSrgSourcesToMcp");
+        // The classes remap to MCP happens on the NeoForge-combined jar instead
+        assertResultFromNode(graph, "mcinject", "output", ResultIds.VANILLA_DEOBFUSCATED);
+    }
+
+    @Test
     void testMCP_1_20_1_WithDevTransforms() throws Exception {
         var graph = buildGraph("--neoform", "de.oceanlabs.mcp:mcp_config:1.20.1@zip", "--access-transformer", "at.cfg");
         assertNotPredecessor(graph, "applyDevTransforms", "decompile");
