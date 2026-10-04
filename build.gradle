@@ -345,6 +345,29 @@ idea {
                             "--write-result=csvMapping:build/1.12.2/forge/csv-mapping.zip"
                     moduleRef(project, sourceSets.main)
                 }
+                "Run Cleanroom 1.12.2 (joined)"(Application) {
+                    mainClass = mainClassName
+                    programParameters = "run --dist joined " +
+                            "--add-repository https://libraries.minecraft.net " +
+                            "--add-repository https://repo.maven.apache.org/maven2 " +
+                            "--neoforge com.cleanroommc:cleanroom:0.6.13-alpha:userdev " +
+                            "--mcp-mappings de.oceanlabs.mcp:mcp_stable:39-1.12@zip " +
+                            "--write-result=clientResources:build/1.12.2/cleanroom/client-resources.jar " +
+                            "--write-result=serverResources:build/1.12.2/cleanroom/server-resources.jar " +
+                            "--write-result=gameSources:build/1.12.2/cleanroom/game-sources.zip " +
+                            "--write-result=gameSourcesWithNeoForge:build/1.12.2/cleanroom/game-sources-with-cleanroom.zip " +
+                            "--write-result=gameJar:build/1.12.2/cleanroom/game.jar " +
+                            "--write-result=gameJarWithNeoForge:build/1.12.2/cleanroom/game-with-cleanroom.jar " +
+                            "--write-result=gameJarWithSources:build/1.12.2/cleanroom/game-with-sources.jar " +
+                            "--write-result=gameJarWithSourcesAndNeoForge:build/1.12.2/cleanroom/game-with-sources-and-cleanroom.jar " +
+                            "--write-result=gameJarNoRecomp:build/1.12.2/cleanroom/game-no-recomp.jar " +
+                            "--write-result=gameJarNoRecompWithNeoForge:build/1.12.2/cleanroom/game-no-recomp-with-cleanroom.jar " +
+                            "--write-result=vanillaDeobfuscated:build/1.12.2/cleanroom/vanilla-deobfuscated.jar " +
+                            "--write-result=namedToIntermediaryMapping:build/1.12.2/cleanroom/named-to-intermediary.srg " +
+                            "--write-result=intermediaryToNamedMapping:build/1.12.2/cleanroom/intermediary-to-named.srg " +
+                            "--write-result=csvMapping:build/1.12.2/cleanroom/csv-mapping.zip"
+                    moduleRef(project, sourceSets.main)
+                }
                 "Run Forge 1.17.1 (joined)"(Application) {
                     mainClass = mainClassName
                     programParameters = "run --dist joined --add-repository https://maven.minecraftforge.net --neoforge net.minecraftforge:forge:1.17.1-37.1.1:userdev --write-result=gameJarWithNeoForge:build/1.17.1-minecraft.jar --write-result=clientResources:build/1.17.1-client-extra.jar --write-result=gameSourcesWithNeoForge:build/1.17.1-minecraft-sources.jar"

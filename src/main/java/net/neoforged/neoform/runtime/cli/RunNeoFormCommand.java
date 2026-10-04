@@ -15,6 +15,7 @@ import net.neoforged.neoform.runtime.actions.RecompileSourcesAction;
 import net.neoforged.neoform.runtime.actions.StripManifestDigestContentFilter;
 import net.neoforged.neoform.runtime.artifacts.ClasspathItem;
 import net.neoforged.neoform.runtime.compatibility.CleanroomClasspath;
+import net.neoforged.neoform.runtime.compatibility.CleanroomRepositories;
 import net.neoforged.neoform.runtime.compatibility.LegacyForgeClasspath;
 import net.neoforged.neoform.runtime.config.neoforge.BinpatcherConfig;
 import net.neoforged.neoform.runtime.config.neoforge.NeoForgeConfig;
@@ -39,6 +40,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
@@ -116,6 +118,16 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
             var neoforgeConfig = NeoForgeConfig.from(neoforgeZipFile);
             neoForgeUniversalArtifact = neoforgeConfig.universalArtifact();
             neoForgeLibraries = neoforgeConfig.libraries();
+
+            // Cleanroom publishes its MCP toolchain artifacts on its own Maven repositories
+            if (CleanroomRepositories.isCleanroomUserdev(List.of(
+                    sourceArtifacts.neoforge,
+                    neoforgeConfig.sourcesArtifact(),
+                    neoforgeConfig.universalArtifact()))) {
+                for (var repository : CleanroomRepositories.additionalRepositories()) {
+                    engine.getArtifactManager().addAdditionalRepository(URI.create(repository));
+                }
+            }
 
             // Allow it to be overridden with local or remote data
             Path neoformArtifact;
@@ -365,9 +377,12 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
         ));
 
         var graph = engine.getGraph();
-        var sourcesWithNeoForgeOutput = createSourcesWithNeoForge(engine, neoforgeSourcesZip);
+        var sourcesWithNeoForgeOutput = createSourcesWithNeoForge(engine, neoforgeSourcesZip, deferUserdevSources);
         var compiledWithNeoForgeOutput = createCompiledWithNeoForge(
-                engine, neoforgeClassesZip, neoforgeConfig.universalFilters());
+                engine,
+                neoforgeClassesZip,
+                neoforgeConfig.universalFilters(),
+                engine.getProcessGeneration().usesLegacyMcp());
 
         var sourcesAndCompiledWithNeoForgeOutput =
                 createSourcesAndCompiledWithNeoForge(graph, compiledWithNeoForgeOutput, sourcesWithNeoForgeOutput);
@@ -432,7 +447,11 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
         ((ApplyDevTransformsAction) binaryPatchOutput.getNode().action()).setAccessTransformersData(List.of("neoForgeAccessTransformers"));
 
         // This is a new result here
-        var binaryWithNeoForgeOutput = createBinaryWithNeoForge(graph, binaryPatchOutput, neoforgeClassesZip);
+        var binaryWithNeoForgeOutput = createBinaryWithNeoForge(
+                graph,
+                binaryPatchOutput,
+                neoforgeClassesZip,
+                neoforgeConfig.universalFilters());
 
         if (engine.getProcessGeneration().sourcesUseIntermediaryNames()) {
             // Minecraft and NeoForge classes need to be remapped,
@@ -476,7 +495,7 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
     }
 
     private static NodeOutput createCompiledWithNeoForge(
-            NeoFormEngine engine, ZipFile neoforgeClassesZip, List<String> universalFilters) {
+            NeoFormEngine engine, ZipFile neoforgeClassesZip, List<String> universalFilters, boolean usesLegacyMcp) {
         var graph = engine.getGraph();
         var recompiledClasses = graph.getRequiredOutput("recompile", "output");
 
@@ -484,9 +503,10 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
         var builder = graph.nodeBuilder("compiledWithNeoForge");
         builder.input("input", recompiledClasses.asInput());
         var output = builder.output("output", NodeOutputType.JAR, "JAR containing NeoForge classes, resources and Minecraft classes");
-        if (engine.getProcessGeneration().sourcesUseIntermediaryNames()) {
-            // Older processes inject and recompile NeoForge sources. Source transformation can discard
-            // ServiceLoader metadata, so restore only that metadata without overwriting recompiled classes.
+        if (engine.getProcessGeneration().sourcesUseIntermediaryNames() || usesLegacyMcp) {
+            // Older processes inject and recompile NeoForge sources, so the classes are already part of
+            // the recompiled output. Only inject the remaining universal content (resources, metadata)
+            // without overwriting the recompiled classes.
             builder.action(createLegacyUniversalMetadataInjection(neoforgeClassesZip, universalFilters));
         } else {
             builder.action(new InjectZipContentAction(List.of(
@@ -498,12 +518,17 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
         return output;
     }
 
+    /**
+     * Injects everything from the universal jar except class files and signature files.
+     * Used when the loader sources were already injected before recompilation, so injecting
+     * the classes again would overwrite the recompiled output (and trip duplicate-entry warnings).
+     */
     static InjectZipContentAction createLegacyUniversalMetadataInjection(
             ZipFile universalJar, List<String> universalFilters) {
-        var serviceProviderFilter = createUniversalFilter(
-                "(?=META-INF/services/[^/]+$)", universalFilters);
+        var contentFilter = createUniversalFilter(
+                "(?!META-INF/[^/]+\\.(SF|RSA|DSA|EC)$|.*\\.class$)", universalFilters);
         return new InjectZipContentAction(List.of(
-                new InjectFromZipFileSource(universalJar, "/", serviceProviderFilter)
+                new InjectFromZipFileSource(universalJar, "/", contentFilter)
         ));
     }
 
@@ -517,7 +542,7 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
     }
 
     // Add a step that produces a sources-zip containing both Minecraft and NeoForge sources
-    private static NodeOutput createSourcesWithNeoForge(NeoFormEngine engine, ZipFile neoforgeSourcesZip) {
+    private static NodeOutput createSourcesWithNeoForge(NeoFormEngine engine, ZipFile neoforgeSourcesZip, boolean deferUserdevSources) {
         var graph = engine.getGraph();
 
         if (engine.getProcessGeneration().sourcesUseIntermediaryNames()) {
@@ -526,17 +551,21 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
             return graph.getResult(ResultIds.GAME_SOURCES);
         } else if (engine.getProcessGeneration().usesLegacyMcp()) {
             // Legacy MCP sources keep SRG names until after patching; the MCP-named sources are the
-            // output of applyMcpCsvData.
+            // output of applyMcpCsvData. When the userdev sources were injected before patching
+            // (deferred to apply its source processor first), they are already part of that output.
             var srgSourcesOutput = graph.getRequiredOutput(engine.getIntermediarySourcesRemapNodeId(), "output");
 
-            var builder = graph.nodeBuilder("sourcesWithNeoForge");
-            builder.input("input", srgSourcesOutput.asInput());
-            var output = builder.output("output", NodeOutputType.ZIP, "Source ZIP containing NeoForge and Minecraft sources");
-            builder.action(new InjectZipContentAction(List.of(
-                    new InjectFromZipFileSource(neoforgeSourcesZip, "/")
-            )));
-            builder.build();
-            return output;
+            if (!deferUserdevSources) {
+                var builder = graph.nodeBuilder("sourcesWithNeoForge");
+                builder.input("input", srgSourcesOutput.asInput());
+                var output = builder.output("output", NodeOutputType.ZIP, "Source ZIP containing NeoForge and Minecraft sources");
+                builder.action(new InjectZipContentAction(List.of(
+                        new InjectFromZipFileSource(neoforgeSourcesZip, "/")
+                )));
+                builder.build();
+                return output;
+            }
+            return srgSourcesOutput;
         } else {
             var transformedSourceOutput = graph.getRequiredOutput("transformSources", "output");
 
@@ -584,13 +613,13 @@ public class RunNeoFormCommand extends NeoFormEngineCommand {
         return output;
     }
 
-    private static NodeOutput createBinaryWithNeoForge(ExecutionGraph graph, NodeOutput binary, ZipFile neoforgeClassesZip) {
+    private static NodeOutput createBinaryWithNeoForge(ExecutionGraph graph, NodeOutput binary, ZipFile neoforgeClassesZip, List<String> universalFilters) {
         // Add a step that produces a classes-zip containing both Minecraft and NeoForge classes
         var builder = graph.nodeBuilder("binaryWithNeoForge");
         builder.input("input", binary.asInput());
         var output = builder.output("output", NodeOutputType.JAR, "JAR containing NeoForge classes, resources and Minecraft classes");
         builder.action(new InjectZipContentAction(List.of(
-                new InjectFromZipFileSource(neoforgeClassesZip, "/")
+                new InjectFromZipFileSource(neoforgeClassesZip, "/", createUniversalFilter("", universalFilters))
         )));
         builder.build();
 

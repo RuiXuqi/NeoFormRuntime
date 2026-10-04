@@ -75,7 +75,7 @@ class RunNeoFormCommandTest {
     }
 
     @Test
-    void legacyUniversalMetadataInjectionRestoresOnlyAllowedServiceProviders() throws Exception {
+    void legacyUniversalMetadataInjectionInjectsResourcesWithoutClasses() throws Exception {
         var recompiledJar = tempDir.resolve("recompiled.jar");
         writeZip(recompiledJar, List.of(
                 new TestEntry("example/Recompiled.class", "recompiled")
@@ -84,7 +84,6 @@ class RunNeoFormCommandTest {
         var universalJar = tempDir.resolve("universal.jar");
         writeZip(universalJar, List.of(
                 new TestEntry("META-INF/services/example.Service", "example.ServiceProvider\n"),
-                new TestEntry("META-INF/services/example.ExcludedService", "example.ExcludedProvider\n"),
                 new TestEntry("META-INF/EXAMPLE.SF", "signature"),
                 new TestEntry("META-INF/MANIFEST.MF", "Manifest-Version: 1.0\n"),
                 new TestEntry("example/Recompiled.class", "universal replacement"),
@@ -100,7 +99,7 @@ class RunNeoFormCommandTest {
         try (var universalZip = new ZipFile(universalJar.toFile())) {
             var action = RunNeoFormCommand.createLegacyUniversalMetadataInjection(
                     universalZip,
-                    List.of("^(?!META-INF/services/example\\.ExcludedService$).*")
+                    List.of("^(?!excluded\\.txt$).*")
             );
             action.run(environment);
         }
@@ -109,11 +108,10 @@ class RunNeoFormCommandTest {
             assertThat(readEntry(output, "META-INF/services/example.Service"))
                     .isEqualTo("example.ServiceProvider\n");
             assertThat(readEntry(output, "example/Recompiled.class")).isEqualTo("recompiled");
-            assertThat(output.getEntry("META-INF/services/example.ExcludedService")).isNull();
-            assertThat(output.getEntry("META-INF/EXAMPLE.SF")).isNull();
-            assertThat(output.getEntry("META-INF/MANIFEST.MF")).isNull();
             assertThat(output.getEntry("example/Universal.class")).isNull();
-            assertThat(output.getEntry("assets/example/icon.png")).isNull();
+            assertThat(output.getEntry("META-INF/EXAMPLE.SF")).isNull();
+            assertThat(readEntry(output, "META-INF/MANIFEST.MF")).isEqualTo("Manifest-Version: 1.0\n");
+            assertThat(readEntry(output, "assets/example/icon.png")).isEqualTo("image");
         }
     }
 

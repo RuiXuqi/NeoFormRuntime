@@ -61,6 +61,15 @@ public class ArtifactManager {
         this.launcherInstallations = launcherInstallations;
     }
 
+    /**
+     * Adds a repository that is consulted after all configured repositories.
+     */
+    public void addAdditionalRepository(URI repositoryBaseUrl) {
+        if (!repositoryBaseUrls.contains(repositoryBaseUrl)) {
+            repositoryBaseUrls.add(repositoryBaseUrl);
+        }
+    }
+
     public Artifact get(MinecraftLibrary library) throws IOException {
         var artifact = library.getArtifactDownload();
         if (artifact == null) {

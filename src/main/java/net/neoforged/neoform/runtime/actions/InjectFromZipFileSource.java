@@ -117,6 +117,15 @@ public class InjectFromZipFileSource implements InjectSource {
         }
     }
 
+    /**
+     * Optional regex for filtering which entries from this source will be injected.
+     * The relative path in the ZIP file will be matched against this regular expression.
+     */
+    @Nullable
+    public Pattern includeFilterPattern() {
+        return includeFilterPattern;
+    }
+
     private boolean matchesIncludeFilter(ZipEntry entry) {
         return includeFilterPattern == null || includeFilterPattern.matcher(entry.getName()).matches();
     }

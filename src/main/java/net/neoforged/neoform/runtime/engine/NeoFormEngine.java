@@ -25,6 +25,7 @@ import net.neoforged.neoform.runtime.cache.CacheManager;
 import net.neoforged.neoform.runtime.cli.FileHashService;
 import net.neoforged.neoform.runtime.cli.LockManager;
 import net.neoforged.neoform.runtime.cli.ResultIds;
+import net.neoforged.neoform.runtime.compatibility.LegacyMcpToolOverrides;
 import net.neoforged.neoform.runtime.config.neoform.NeoFormConfig;
 import net.neoforged.neoform.runtime.config.neoform.NeoFormDistConfig;
 import net.neoforged.neoform.runtime.config.neoform.NeoFormFunction;
@@ -51,6 +52,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -683,12 +685,21 @@ public class NeoFormEngine implements AutoCloseable {
         List<MavenCoordinate> toolClasspathCoordinates = new ArrayList<>(toolClasspath.size());
         for (String artifactId : toolClasspath) {
             try {
-                toolClasspathCoordinates.add(MavenCoordinate.parse(artifactId));
+                toolClasspathCoordinates.add(overrideToolArtifact(step.type(), MavenCoordinate.parse(artifactId)));
             } catch (Exception e) {
                 throw new IllegalArgumentException("Function for step " + step + " has invalid tool: " + artifactId);
             }
         }
         return toolClasspathCoordinates;
+    }
+
+    private static MavenCoordinate overrideToolArtifact(String functionId, MavenCoordinate toolArtifact) {
+        var override = LegacyMcpToolOverrides.getToolOverride(functionId, toolArtifact);
+        if (override != null) {
+            LOG.println("Overriding " + functionId + " tool " + toolArtifact + " with " + override);
+            return override;
+        }
+        return toolArtifact;
     }
 
     private void createDownloadFromVersionManifest(ExecutionNodeBuilder builder, String manifestEntry, NodeOutputType jar, String description) {

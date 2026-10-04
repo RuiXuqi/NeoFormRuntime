@@ -2,6 +2,8 @@ package net.neoforged.neoform.runtime.graph;
 
 import net.neoforged.neoform.runtime.actions.ApplyDevTransformsAction;
 import net.neoforged.neoform.runtime.actions.ExternalJavaToolAction;
+import net.neoforged.neoform.runtime.actions.InjectFromZipFileSource;
+import net.neoforged.neoform.runtime.actions.InjectZipContentAction;
 import net.neoforged.neoform.runtime.cli.Main;
 import net.neoforged.neoform.runtime.cli.ResultIds;
 import net.neoforged.neoform.runtime.cli.RunNeoFormCommand;
@@ -162,6 +164,53 @@ public class NeoFormGraphTest {
         assertResultFromNode(graph, "remapSrgClassesToOfficial", "output", ResultIds.GAME_JAR_NO_RECOMP);
         assertResultFromNode(graph, "remapSrgClassesToOfficial", "output", ResultIds.GAME_JAR_NO_RECOMP_WITH_NEOFORGE);
         assertResultFromNode(graph, "rename", "output", ResultIds.VANILLA_DEOBFUSCATED);
+    }
+
+    @Test
+    void testMCP_1_12_2_WithForgeInjectsUniversalResourcesOnly() throws Exception {
+        var graph = buildGraph("--add-repository", "https://maven.minecraftforge.net", "--neoforge", "net.minecraftforge:forge:1.12.2-14.23.5.2860:userdev3");
+
+        // Legacy MCP compiles the Forge sources itself, so the universal jar contributes
+        // everything except classes and signature files
+        var action = (InjectZipContentAction) graph.getRequiredNode("compiledWithNeoForge").action();
+        var source = (InjectFromZipFileSource) action.getInjectedSources().getFirst();
+        assertThat(source.includeFilterPattern().pattern())
+                .contains(".*\\.class$")
+                .contains("META-INF/")
+                .doesNotContain("(?=META-INF/services/");
+    }
+
+    @Test
+    void testMCP_1_12_2_WithForgeExcludesBinpatchesFromBinary() throws Exception {
+        var graph = buildGraph("--add-repository", "https://maven.minecraftforge.net", "--neoforge", "net.minecraftforge:forge:1.12.2-14.23.5.2860:userdev3");
+
+        // FML applies binpatches.pack.lzma from the classpath at runtime, so the dev jar must not contain it
+        var action = (InjectZipContentAction) graph.getRequiredNode("binaryWithNeoForge").action();
+        var source = (InjectFromZipFileSource) action.getInjectedSources().getFirst();
+        assertThat(source.includeFilterPattern().pattern())
+                .contains("binpatches\\.pack\\.lzma");
+    }
+
+    @Test
+    void testMCP_1_12_2_BinaryPatchRenameUsesCompatibleSpecialSource() throws Exception {
+        var graph = buildGraph("--add-repository", "https://maven.minecraftforge.net", "--neoforge", "net.minecraftforge:forge:1.12.2-14.23.5.2860:userdev3");
+
+        // binaryPatchRename clones the rename function; SpecialSource 1.8.3 is too old for modern class files
+        var action = (ExternalJavaToolAction) graph.getRequiredNode("binaryPatchRename").action();
+        assertThat(action.getClasspath())
+                .extracting(MavenCoordinate::toString)
+                .containsExactly("net.md-5:SpecialSource:1.8.3:shaded");
+    }
+
+    @Test
+    void testCleanroom_BinaryPatchRenameUsesOverriddenSpecialSource() throws Exception {
+        var graph = buildGraph("--neoforge", "com.cleanroommc:cleanroom:0.6.13-alpha:userdev");
+
+        // Cleanroom's mcp_config references SpecialSource 1.11.3, which cannot read modern class files
+        var action = (ExternalJavaToolAction) graph.getRequiredNode("binaryPatchRename").action();
+        assertThat(action.getClasspath())
+                .extracting(MavenCoordinate::toString)
+                .containsExactly("net.md-5:SpecialSource:1.11.6:shaded");
     }
 
     private static void assertResultFromNode(ExecutionGraph graph, String nodeId, String outputId, String resultId) {
