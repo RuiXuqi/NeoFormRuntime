@@ -7,6 +7,7 @@ public enum NodeOutputType {
     ZIP(".zip"),
     JSON(".json"),
     TSRG(".tsrg"),
+    // TSRG2 intentionally shares the .tsrg extension; do not infer the format from the file name.
     TSRG2(".tsrg"),
     SRG(".srg");
 

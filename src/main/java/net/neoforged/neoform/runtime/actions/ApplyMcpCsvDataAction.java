@@ -7,10 +7,13 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
+import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipInputStream;
@@ -37,8 +40,8 @@ public class ApplyMcpCsvDataAction extends BuiltInAction {
         var sourcesPath = environment.getRequiredInputPath("sources");
         var outputPath = environment.getOutputPath("output");
 
-        try (var zipIn = new ZipInputStream(new BufferedInputStream(java.nio.file.Files.newInputStream(sourcesPath)));
-             var zipOut = new ZipOutputStream(new BufferedOutputStream(java.nio.file.Files.newOutputStream(outputPath)))) {
+        try (var zipIn = new ZipInputStream(new BufferedInputStream(Files.newInputStream(sourcesPath)));
+             var zipOut = new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(outputPath)))) {
             for (var entry = zipIn.getNextEntry(); entry != null; entry = zipIn.getNextEntry()) {
                 zipOut.putNextEntry(entry);
 
@@ -209,7 +212,7 @@ public class ApplyMcpCsvDataAction extends BuiltInAction {
     }
 
     private static final class DocsByClass {
-        private final Map<String, ClassDocs> docs = new HashMap<>();
+        private final NavigableMap<String, ClassDocs> docs = new TreeMap<>();
 
         ClassDocs getOrCreate(String className) {
             return docs.computeIfAbsent(className, ignored -> new ClassDocs(new HashMap<>(), new HashMap<>()));
@@ -217,14 +220,27 @@ public class ApplyMcpCsvDataAction extends BuiltInAction {
 
         ClassDocs forSourceFile(String sourceClassName) {
             var result = new ClassDocs(new HashMap<>(), new HashMap<>());
-            for (var entry : docs.entrySet()) {
-                var className = entry.getKey();
-                if (className.equals(sourceClassName) || className.startsWith(sourceClassName + "$")) {
-                    result.fieldDocs().putAll(entry.getValue().fieldDocs());
-                    result.methodDocs().putAll(entry.getValue().methodDocs());
-                }
-            }
+            collectInto(sourceClassName, result);
             return result;
+        }
+
+        private void collectInto(String className, ClassDocs result) {
+            var classDocs = docs.get(className);
+            if (classDocs != null) {
+                result.fieldDocs().putAll(classDocs.fieldDocs());
+                result.methodDocs().putAll(classDocs.methodDocs());
+            }
+
+            // Merge docs from all inner classes (e.g. Block$1 for Block)
+            var prefix = className + "$";
+            var tail = docs.tailMap(prefix, false);
+            for (var entry : tail.entrySet()) {
+                if (!entry.getKey().startsWith(prefix)) {
+                    break;
+                }
+                result.fieldDocs().putAll(entry.getValue().fieldDocs());
+                result.methodDocs().putAll(entry.getValue().methodDocs());
+            }
         }
     }
 }

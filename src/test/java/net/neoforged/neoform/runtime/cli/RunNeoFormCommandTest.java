@@ -4,8 +4,13 @@ import net.neoforged.neoform.runtime.actions.ApplySourceTransformAction;
 import net.neoforged.neoform.runtime.actions.CreateLibrariesOptionsFile;
 import net.neoforged.neoform.runtime.actions.ExternalJavaToolAction;
 import net.neoforged.neoform.runtime.artifacts.ClasspathItem;
+import net.neoforged.neoform.runtime.config.neoform.NeoFormFunction;
+import net.neoforged.neoform.runtime.engine.NeoFormEngine;
 import net.neoforged.neoform.runtime.engine.ProcessingEnvironment;
 import net.neoforged.neoform.runtime.graph.ExecutionGraph;
+import net.neoforged.neoform.runtime.graph.NodeInput;
+import net.neoforged.neoform.runtime.graph.NodeOutput;
+import net.neoforged.neoform.runtime.graph.NodeOutputType;
 import net.neoforged.neoform.runtime.manifests.MinecraftDownload;
 import net.neoforged.neoform.runtime.manifests.MinecraftLibrary;
 import net.neoforged.neoform.runtime.manifests.MinecraftVersionManifest;
@@ -72,6 +77,42 @@ class RunNeoFormCommandTest {
                 .containsExactly(
                         ClasspathItem.of(retained),
                         ClasspathItem.of(MavenCoordinate.parse("io.netty:netty-common:4.2.15.Final")));
+    }
+
+    @Test
+    void userdevSourceProcessorToolOverrideIsAppliedThroughEngine() throws Exception {
+        // The CLI used to assemble the source processor classpath itself and miss the legacy
+        // tool overrides; going through the engine must yield the overridden artifact.
+        var graph = new ExecutionGraph();
+        var inputNode = graph.nodeBuilder("patch");
+        inputNode.action(new ExternalJavaToolAction(MavenCoordinate.parse("test:tool:1.0")));
+        var inputOutput = inputNode.output("output", NodeOutputType.ZIP, "input");
+        inputNode.build();
+
+        var engine = new NeoFormEngine(
+                null, null, null, null);
+        try {
+            var builder = graph.nodeBuilder("processForgeSources");
+            builder.input("input", inputOutput.asInput());
+            var function = new NeoFormFunction(
+                    "net.md-5:SpecialSource:1.11.3:shaded",
+                    null,
+                    null,
+                    null,
+                    List.of("--input", "{input}", "--output", "{output}"),
+                    null);
+
+            var output = engine.applyFunctionToNode("rename", Map.of(), List.of(), function, builder);
+
+            assertThat(output).isPresent();
+            var action = (ExternalJavaToolAction) builder.build().action();
+            assertThat(action.getClasspath())
+                    .extracting(MavenCoordinate::toString)
+                    .containsExactly("net.md-5:SpecialSource:1.11.6:shaded");
+            assertThat(action.getArgs()).contains("{input}", "{output}");
+        } finally {
+            engine.close();
+        }
     }
 
     @Test

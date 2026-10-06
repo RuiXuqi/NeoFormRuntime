@@ -348,6 +348,8 @@ idea {
                 "Run Cleanroom 1.12.2 (joined)"(Application) {
                     mainClass = mainClassName
                     programParameters = "run --dist joined " +
+                            "--add-repository https://repo.cleanroommc.com/releases " +
+                            "--add-repository https://maven.arcseekers.com/releases " +
                             "--add-repository https://libraries.minecraft.net " +
                             "--add-repository https://repo.maven.apache.org/maven2 " +
                             "--neoforge com.cleanroommc:cleanroom:0.6.13-alpha:userdev " +

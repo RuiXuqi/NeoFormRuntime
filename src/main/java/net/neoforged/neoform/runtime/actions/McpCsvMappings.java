@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -126,7 +127,7 @@ public record McpCsvMappings(Map<String, MemberMapping> methods, Map<String, Mem
     }
 
     static List<String> parseCsvLine(String line) {
-        var columns = new java.util.ArrayList<String>();
+        var columns = new ArrayList<String>();
         var current = new StringBuilder();
         boolean quoted = false;
         for (int i = 0; i < line.length(); i++) {

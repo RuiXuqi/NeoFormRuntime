@@ -97,8 +97,8 @@ public class NeoFormGraphTest {
                 .doesNotContain("--prefix");
 
         // No Recompile Pipeline
-        assertNodeChain(graph, "rename", "remapSrgClassesToOfficial");
-        assertResultFromNode(graph, "remapSrgClassesToOfficial", "output", ResultIds.GAME_JAR_NO_RECOMP);
+        assertNodeChain(graph, "rename", "remapClassesToNamed");
+        assertResultFromNode(graph, "remapClassesToNamed", "output", ResultIds.GAME_JAR_NO_RECOMP);
         assertResultFromNode(graph, "rename", "output", ResultIds.VANILLA_DEOBFUSCATED);
     }
 
@@ -134,10 +134,46 @@ public class NeoFormGraphTest {
         var graph = buildGraph("--neoform", "de.oceanlabs.mcp:mcp_config:1.12.2@zip");
 
         // 1.12.2 MCP patches are written against SRG names, so sources keep SRG names until
-        // applyMcpCsvData (javadoc/params) and remapSrgSourcesToMcp (names) after patching.
-        assertNodeChain(graph, "rename", "mcinject", "decompile", "inject", "patch", "applyMcpCsvData", "remapSrgSourcesToMcp");
+        // applyMcpCsvData (javadoc/params) and remapSourcesToNamed (names) after patching.
+        assertNodeChain(graph, "rename", "mcinject", "decompile", "inject", "patch", "applyMcpCsvData", "remapSourcesToNamed");
         // The classes remap to MCP happens on the NeoForge-combined jar instead
         assertResultFromNode(graph, "mcinject", "output", ResultIds.VANILLA_DEOBFUSCATED);
+    }
+
+    @Test
+    void testMCP_1_12_2_RegistersAllMcpMappingResults() {
+        var graph = buildGraph("--neoform", "de.oceanlabs.mcp:mcp_config:1.12.2@zip");
+
+        graph.getRequiredNode("createMcpMappings");
+        assertResultFromNode(graph, "createMcpMappings", "mcpToSrgTsrg", ResultIds.NAMED_TO_INTERMEDIARY_MAPPING);
+        assertResultFromNode(graph, "createMcpMappings", "mcpToSrg", ResultIds.NAMED_TO_INTERMEDIARY_MAPPING_SRG);
+        assertResultFromNode(graph, "createMcpMappings", "srgToMcp", ResultIds.INTERMEDIARY_TO_NAMED_MAPPING);
+        assertResultFromNode(graph, "createMcpMappings", "srgToMcpTsrg", ResultIds.INTERMEDIARY_TO_NAMED_MAPPING_TSRG);
+        assertResultFromNode(graph, "createMcpMappings", "srgToMcpTsrg2", ResultIds.INTERMEDIARY_TO_NAMED_MAPPING_TSRG2);
+        assertResultFromNode(graph, "createMcpMappings", "csvMappings", ResultIds.CSV_MAPPING);
+        assertResultFromNode(graph, "createMcpMappings", "notchToSrg", ResultIds.NOTCH_TO_INTERMEDIARY_MAPPING);
+    }
+
+    @Test
+    void testMCP_1_15_2_SourceChainAppliesCsvDataBeforeRemap() {
+        var graph = buildGraph("--neoform", "de.oceanlabs.mcp:mcp_config:1.15.2@zip", "--mcp-mappings", "de.oceanlabs.mcp:mcp_stable:60-1.15@zip");
+
+        // The MCP CSV data (javadoc/params) is keyed by SRG names, so it must be applied to the
+        // patched sources while they still use SRG names, before the SRG -> MCP source remap.
+        assertNodeChain(graph, "rename", "decompile", "inject", "patch", "applyMcpCsvData", "remapSourcesToNamed");
+        // Unlike 1.12.2, the class remap is part of the engine-built graph for this version range
+        assertResultFromNode(graph, "remapClassesToNamed", "output", ResultIds.GAME_JAR_NO_RECOMP);
+    }
+
+    @Test
+    void testMCP_1_20_1_UsesIntermediaryPipeline() throws Exception {
+        // Guard rail for the INTERMEDIARY naming scheme (1.17-1.20.1): sources and classes are
+        // remapped from SRG to official names via Mojang's ProGuard mappings.
+        var graph = buildGraph("--neoform", "de.oceanlabs.mcp:mcp_config:1.20.1@zip");
+
+        assertNodeChain(graph, "patch", "remapSourcesToNamed");
+        assertNodeChain(graph, "rename", "remapClassesToNamed");
+        assertResultFromNode(graph, "remapClassesToNamed", "output", ResultIds.GAME_JAR_NO_RECOMP);
     }
 
     @Test
@@ -146,8 +182,8 @@ public class NeoFormGraphTest {
         assertNotPredecessor(graph, "applyDevTransforms", "decompile");
 
         // No Recompile Pipeline
-        assertNodeChain(graph, "rename", "applyDevTransforms", "remapSrgClassesToOfficial");
-        assertResultFromNode(graph, "remapSrgClassesToOfficial", "output", ResultIds.GAME_JAR_NO_RECOMP);
+        assertNodeChain(graph, "rename", "applyDevTransforms", "remapClassesToNamed");
+        assertResultFromNode(graph, "remapClassesToNamed", "output", ResultIds.GAME_JAR_NO_RECOMP);
         assertResultFromNode(graph, "rename", "output", ResultIds.VANILLA_DEOBFUSCATED);
     }
 
@@ -160,9 +196,9 @@ public class NeoFormGraphTest {
         assertResultFromNode(graph, "compiledWithNeoForge", "output", ResultIds.GAME_JAR_WITH_NEOFORGE);
 
         // No Recompile Pipeline
-        assertNodeChain(graph, "rename", "binaryPatch", "copyUnpatchedClasses", "applyDevTransforms", "binaryWithNeoForge", "remapSrgClassesToOfficial");
-        assertResultFromNode(graph, "remapSrgClassesToOfficial", "output", ResultIds.GAME_JAR_NO_RECOMP);
-        assertResultFromNode(graph, "remapSrgClassesToOfficial", "output", ResultIds.GAME_JAR_NO_RECOMP_WITH_NEOFORGE);
+        assertNodeChain(graph, "rename", "binaryPatch", "copyUnpatchedClasses", "applyDevTransforms", "binaryWithNeoForge", "remapClassesToNamed");
+        assertResultFromNode(graph, "remapClassesToNamed", "output", ResultIds.GAME_JAR_NO_RECOMP);
+        assertResultFromNode(graph, "remapClassesToNamed", "output", ResultIds.GAME_JAR_NO_RECOMP_WITH_NEOFORGE);
         assertResultFromNode(graph, "rename", "output", ResultIds.VANILLA_DEOBFUSCATED);
     }
 
@@ -204,13 +240,34 @@ public class NeoFormGraphTest {
 
     @Test
     void testCleanroom_BinaryPatchRenameUsesOverriddenSpecialSource() throws Exception {
-        var graph = buildGraph("--neoforge", "com.cleanroommc:cleanroom:0.6.13-alpha:userdev");
+        var graph = buildGraph(
+                "--add-repository", "https://repo.cleanroommc.com/releases",
+                "--add-repository", "https://repo.cleanroommc.com/snapshots",
+                "--add-repository", "https://maven.arcseekers.com/releases",
+                "--neoforge", "com.cleanroommc:cleanroom:0.6.13-alpha:userdev");
 
         // Cleanroom's mcp_config references SpecialSource 1.11.3, which cannot read modern class files
         var action = (ExternalJavaToolAction) graph.getRequiredNode("binaryPatchRename").action();
         assertThat(action.getClasspath())
                 .extracting(MavenCoordinate::toString)
                 .containsExactly("net.md-5:SpecialSource:1.11.6:shaded");
+    }
+
+    @Test
+    void testMCP_1_12_2_WithForgeSourceProcessorGoesThroughEngineFunctionNode() throws Exception {
+        var graph = buildGraph(
+                "--add-repository", "https://maven.minecraftforge.net",
+                "--neoforge", "net.minecraftforge:forge:1.12.2-14.23.5.2860:userdev3");
+
+        // The CLI used to duplicate the engine's function classpath assembly and silently missed
+        // the legacy MCP tool overrides; the source processor node must now be built by the engine.
+        var processorNode = graph.getNode("processForgeSources");
+        assertNotNull(processorNode, "Expected a processForgeSources node for 1.12.2 userdev");
+        var action = (ExternalJavaToolAction) processorNode.action();
+        assertThat(action.getArgs()).contains("{input}", "{output}");
+        assertThat(action.getClasspath())
+                .extracting(MavenCoordinate::toString)
+                .containsExactly("net.minecraftforge:mcpcleanup:2.3.2:fatjar");
     }
 
     private static void assertResultFromNode(ExecutionGraph graph, String nodeId, String outputId, String resultId) {
